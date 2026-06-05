@@ -24,6 +24,7 @@ export const api = {
     body: JSON.stringify(payload)
   }),
   campaignStats: (id) => request(`/api/campaigns/${encodeURIComponent(id)}/stats`),
+  emailBreakdown: (id) => request(`/api/campaigns/${encodeURIComponent(id)}/email-breakdown`),
   getGa4: () => request('/api/config/ga4'),
   saveGa4: (payload) => request('/api/config/ga4', {
     method: 'POST',

@@ -19,7 +19,7 @@ export default function Settings() {
     setError('');
     try {
       await api.saveGa4(form);
-      setStatus('GA4 config saved');
+      setStatus('GA4設定を保存しました');
       setForm((current) => ({ ...current, api_secret: '' }));
     } catch (err) {
       setError(err.message);
@@ -29,22 +29,22 @@ export default function Settings() {
   return (
     <section className="panel settings-panel">
       <div className="panel-heading">
-        <h2>GA4 Measurement Protocol</h2>
+        <h2>GA4 Measurement Protocol設定</h2>
       </div>
       {error && <div className="alert">{error}</div>}
       {status && <div className="success">{status}</div>}
       <form className="form" onSubmit={submit}>
         <label>
-          <span>Measurement ID</span>
+          <span>測定ID</span>
           <input value={form.measurement_id} onChange={(event) => setForm({ ...form, measurement_id: event.target.value })} placeholder="G-XXXXXXXXXX" required />
         </label>
         <label>
-          <span>API Secret</span>
-          <input value={form.api_secret} onChange={(event) => setForm({ ...form, api_secret: event.target.value })} placeholder="Measurement Protocol API secret" required />
+          <span>APIシークレット</span>
+          <input value={form.api_secret} onChange={(event) => setForm({ ...form, api_secret: event.target.value })} placeholder="Measurement Protocol APIシークレット" required />
         </label>
         <button className="primary">
           <Save size={18} />
-          <span>Save GA4 settings</span>
+          <span>GA4設定を保存</span>
         </button>
       </form>
     </section>

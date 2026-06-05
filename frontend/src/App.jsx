@@ -7,9 +7,9 @@ import Settings from './pages/Settings.jsx';
 import { api } from './api.js';
 
 const tabs = [
-  { id: 'dashboard', label: 'Dashboard', icon: BarChart3 },
-  { id: 'campaigns', label: 'Campaigns', icon: MailPlus },
-  { id: 'settings', label: 'GA4 Settings', icon: SettingsIcon }
+  { id: 'dashboard', label: 'ダッシュボード', icon: BarChart3 },
+  { id: 'campaigns', label: 'キャンペーン', icon: MailPlus },
+  { id: 'settings', label: 'GA4設定', icon: SettingsIcon }
 ];
 
 export default function App() {
@@ -55,7 +55,7 @@ export default function App() {
           <span className="brand-mark"><Activity size={22} /></span>
           <div>
             <strong>jcity Tracker</strong>
-            <span>GA4 email campaigns</span>
+            <span>GA4メールキャンペーン</span>
           </div>
         </div>
         <nav className="nav">
@@ -79,10 +79,10 @@ export default function App() {
       <main className="main">
         <header className="topbar">
           <div>
-            <p className="eyebrow">Email tracking management</p>
-            <h1>{view === 'detail' ? selectedCampaign?.name || 'Campaign detail' : tabs.find((tab) => tab.id === view)?.label}</h1>
+            <p className="eyebrow">メールトラッキング管理</p>
+            <h1>{view === 'detail' ? selectedCampaign?.name || 'キャンペーン詳細' : tabs.find((tab) => tab.id === view)?.label}</h1>
           </div>
-          <button className="icon-button" onClick={loadCampaigns} disabled={loading} title="Refresh stats">
+          <button className="icon-button" onClick={loadCampaigns} disabled={loading} title="統計を更新">
             <RefreshCcw size={18} />
           </button>
         </header>

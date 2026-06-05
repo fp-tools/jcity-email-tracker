@@ -28,46 +28,46 @@ export default function Campaigns({ campaigns, onCreated, onOpenCampaign }) {
     <div className="split">
       <section className="panel">
         <div className="panel-heading">
-          <h2>Create campaign</h2>
+          <h2>キャンペーン作成</h2>
         </div>
         {error && <div className="alert">{error}</div>}
         <form className="form" onSubmit={submit}>
           <label>
-            <span>Name</span>
-            <input value={form.name} onChange={update('name')} placeholder="June newsletter" required />
+            <span>キャンペーン名</span>
+            <input value={form.name} onChange={update('name')} placeholder="6月ニュースレター" required />
           </label>
           <label>
-            <span>Subject</span>
-            <input value={form.subject} onChange={update('subject')} placeholder="Subject line in jcity" />
+            <span>件名</span>
+            <input value={form.subject} onChange={update('subject')} placeholder="jcityのメール件名" />
           </label>
           <label>
-            <span>jcity campaign ID</span>
+            <span>jcityキャンペーンID</span>
             <input value={form.jcity_id} onChange={update('jcity_id')} placeholder="JCT-2026-06" />
           </label>
           <label>
-            <span>Total sent</span>
+            <span>配信数</span>
             <input value={form.total_sent} onChange={update('total_sent')} type="number" min="0" placeholder="12000" />
           </label>
           <button className="primary" disabled={saving}>
             <Plus size={18} />
-            <span>{saving ? 'Creating...' : 'Create campaign'}</span>
+            <span>{saving ? '作成中...' : 'キャンペーン作成'}</span>
           </button>
         </form>
       </section>
 
       <section className="panel">
         <div className="panel-heading">
-          <h2>Campaigns</h2>
-          <span>{campaigns.length} total</span>
+          <h2>キャンペーン</h2>
+          <span>{campaigns.length} 件</span>
         </div>
         <div className="campaign-list">
           {campaigns.map((campaign) => (
             <button key={campaign.id} onClick={() => onOpenCampaign(campaign.id)}>
               <strong>{campaign.name}</strong>
-              <span>{campaign.total_sent.toLocaleString()} sent · {campaign.open_rate}% open · {campaign.click_rate}% click</span>
+              <span>{campaign.total_sent.toLocaleString()} 配信数 / {campaign.open_rate}% 開封 / {campaign.click_rate}% クリック</span>
             </button>
           ))}
-          {!campaigns.length && <p className="empty">Create a campaign to generate jcity snippets.</p>}
+          {!campaigns.length && <p className="empty">キャンペーンを作成してスニペットを生成しましょう</p>}
         </div>
       </section>
     </div>

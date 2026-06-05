@@ -60,7 +60,8 @@ const listCampaignsStmt = db.prepare(`
     COUNT(CASE WHEN e.event_type = 'click' THEN 1 END) AS clicks,
     COUNT(DISTINCT CASE WHEN e.event_type = 'click' THEN e.email_id END) AS unique_clicks,
     COUNT(CASE WHEN e.event_type = 'conversion' THEN 1 END) AS conversions,
-    COUNT(DISTINCT CASE WHEN e.event_type = 'conversion' THEN e.email_id END) AS unique_conversions
+    COUNT(DISTINCT CASE WHEN e.event_type = 'conversion' THEN e.email_id END) AS unique_conversions,
+    COUNT(DISTINCT e.email_id) AS unique_recipients
   FROM campaigns c
   LEFT JOIN email_events e ON e.campaign_id = c.id
   GROUP BY c.id
@@ -82,7 +83,8 @@ const statsStmt = db.prepare(`
     COUNT(CASE WHEN e.event_type = 'click' THEN 1 END) AS clicks,
     COUNT(DISTINCT CASE WHEN e.event_type = 'click' THEN e.email_id END) AS unique_clicks,
     COUNT(CASE WHEN e.event_type = 'conversion' THEN 1 END) AS conversions,
-    COUNT(DISTINCT CASE WHEN e.event_type = 'conversion' THEN e.email_id END) AS unique_conversions
+    COUNT(DISTINCT CASE WHEN e.event_type = 'conversion' THEN e.email_id END) AS unique_conversions,
+    COUNT(DISTINCT e.email_id) AS unique_recipients
   FROM campaigns c
   LEFT JOIN email_events e ON e.campaign_id = c.id
   WHERE c.id = ?
@@ -95,6 +97,19 @@ const recentEventsStmt = db.prepare(`
   WHERE campaign_id = ?
   ORDER BY created_at DESC, id DESC
   LIMIT ?
+`);
+
+const emailBreakdownStmt = db.prepare(`
+  SELECT
+    email_id,
+    MAX(CASE WHEN event_type = 'open' THEN 1 ELSE 0 END) AS opened,
+    MAX(CASE WHEN event_type = 'click' THEN 1 ELSE 0 END) AS clicked,
+    MAX(CASE WHEN event_type = 'conversion' THEN 1 ELSE 0 END) AS converted,
+    MAX(created_at) AS last_event_at
+  FROM email_events
+  WHERE campaign_id = ?
+  GROUP BY email_id
+  ORDER BY last_event_at DESC
 `);
 
 const saveGa4Stmt = db.prepare(`
@@ -120,6 +135,7 @@ function withRates(row) {
     unique_clicks: Number(row.unique_clicks || 0),
     conversions: Number(row.conversions || 0),
     unique_conversions: Number(row.unique_conversions || 0),
+    unique_recipients: Number(row.unique_recipients || 0),
     open_rate: rate(row.unique_opens),
     click_rate: rate(row.unique_clicks),
     conversion_rate: rate(row.unique_conversions)
@@ -171,6 +187,15 @@ export function getCampaignStats(id, limit = 100) {
     ...withRates(stats),
     recent_events: recentEventsStmt.all(id, Math.min(Math.max(Number(limit) || 100, 1), 500))
   };
+}
+
+export function getEmailBreakdown(campaignId) {
+  return emailBreakdownStmt.all(campaignId).map((row) => ({
+    ...row,
+    opened: Boolean(row.opened),
+    clicked: Boolean(row.clicked),
+    converted: Boolean(row.converted)
+  }));
 }
 
 export function saveGa4Config(config) {

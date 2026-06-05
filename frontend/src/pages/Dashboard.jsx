@@ -25,25 +25,25 @@ export default function Dashboard({ campaigns, loading, onOpenCampaign }) {
   return (
     <div className="stack">
       <div className="metrics-grid">
-        <Metric label="Unique open rate" value={pct(totals.uniqueOpens)} note={`${totals.uniqueOpens} / ${totals.sent} sent`} icon={UsersRound} />
-        <Metric label="Unique click rate" value={pct(totals.uniqueClicks)} note={`${totals.uniqueClicks} clicked`} icon={MousePointerClick} />
-        <Metric label="CV rate" value={pct(totals.uniqueConversions)} note={`${totals.uniqueConversions} conversions`} icon={Target} />
+        <Metric label="ユニーク開封率" value={pct(totals.uniqueOpens)} note={`${totals.uniqueOpens} / ${totals.sent} 配信数`} icon={UsersRound} />
+        <Metric label="ユニーククリック率" value={pct(totals.uniqueClicks)} note={`${totals.uniqueClicks} クリック`} icon={MousePointerClick} />
+        <Metric label="CV率" value={pct(totals.uniqueConversions)} note={`${totals.uniqueConversions} コンバージョン`} icon={Target} />
       </div>
 
       <section className="panel">
         <div className="panel-heading">
-          <h2>Campaign performance</h2>
-          <span>{loading ? 'Refreshing...' : `${campaigns.length} campaigns`}</span>
+          <h2>キャンペーン成績</h2>
+          <span>{loading ? '更新中...' : `${campaigns.length} キャンペーン`}</span>
         </div>
         <div className="table-wrap">
           <table>
             <thead>
               <tr>
-                <th>Campaign</th>
-                <th>Sent</th>
-                <th>Open rate</th>
-                <th>Click rate</th>
-                <th>CV rate</th>
+                <th>キャンペーン名</th>
+                <th>配信数</th>
+                <th>開封率</th>
+                <th>クリック率</th>
+                <th>CV率</th>
               </tr>
             </thead>
             <tbody>
@@ -61,7 +61,7 @@ export default function Dashboard({ campaigns, loading, onOpenCampaign }) {
               ))}
               {!campaigns.length && (
                 <tr>
-                  <td colSpan="5" className="empty">No campaigns yet.</td>
+                  <td colSpan="5" className="empty">まだキャンペーンがありません</td>
                 </tr>
               )}
             </tbody>
