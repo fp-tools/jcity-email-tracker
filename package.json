@@ -1,0 +1,18 @@
+{
+  "name": "jcity-email-tracker",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "npm --workspace backend run dev",
+    "dev:frontend": "npm --workspace frontend run dev",
+    "build": "npm --workspace frontend run build",
+    "start": "npm --workspace backend start"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
