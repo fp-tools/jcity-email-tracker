@@ -32,14 +32,14 @@ export default function Dashboard({ campaigns, loading, onOpenCampaign }) {
 
       <section className="panel">
         <div className="panel-heading">
-          <h2>キャンペーン成績</h2>
-          <span>{loading ? '更新中...' : `${campaigns.length} キャンペーン`}</span>
+          <h2>全メール成績</h2>
+          <span>{loading ? '更新中...' : `${campaigns.length} メール`}</span>
         </div>
         <div className="table-wrap">
           <table>
             <thead>
               <tr>
-                <th>キャンペーン名</th>
+                <th>メール名</th>
                 <th>配信数</th>
                 <th>開封率</th>
                 <th>クリック率</th>
@@ -61,7 +61,7 @@ export default function Dashboard({ campaigns, loading, onOpenCampaign }) {
               ))}
               {!campaigns.length && (
                 <tr>
-                  <td colSpan="5" className="empty">まだキャンペーンがありません</td>
+                  <td colSpan="5" className="empty">まだメールがありません</td>
                 </tr>
               )}
             </tbody>

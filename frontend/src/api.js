@@ -17,17 +17,25 @@ async function request(path, options = {}) {
   return data;
 }
 
+const get = (path) => request(path);
+const post = (path, payload) => request(path, {
+  method: 'POST',
+  body: JSON.stringify(payload)
+});
+const del = (path) => request(path, { method: 'DELETE' });
+
 export const api = {
-  listCampaigns: () => request('/api/campaigns'),
-  createCampaign: (payload) => request('/api/campaigns', {
-    method: 'POST',
-    body: JSON.stringify(payload)
-  }),
-  campaignStats: (id) => request(`/api/campaigns/${encodeURIComponent(id)}/stats`),
-  emailBreakdown: (id) => request(`/api/campaigns/${encodeURIComponent(id)}/email-breakdown`),
-  getGa4: () => request('/api/config/ga4'),
-  saveGa4: (payload) => request('/api/config/ga4', {
-    method: 'POST',
-    body: JSON.stringify(payload)
-  })
+  projects: {
+    list: () => get('/api/projects'),
+    create: (data) => post('/api/projects', data),
+    get: (id) => get(`/api/projects/${encodeURIComponent(id)}`),
+    stats: (id) => get(`/api/projects/${encodeURIComponent(id)}/stats`),
+    delete: (id) => del(`/api/projects/${encodeURIComponent(id)}`)
+  },
+  listCampaigns: () => get('/api/campaigns'),
+  createCampaign: (payload) => post('/api/campaigns', payload),
+  campaignStats: (id) => get(`/api/campaigns/${encodeURIComponent(id)}/stats`),
+  emailBreakdown: (id) => get(`/api/campaigns/${encodeURIComponent(id)}/email-breakdown`),
+  getGa4: () => get('/api/config/ga4'),
+  saveGa4: (payload) => post('/api/config/ga4', payload)
 };

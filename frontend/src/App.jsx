@@ -1,30 +1,37 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Activity, BarChart3, MailPlus, RefreshCcw, Settings as SettingsIcon } from 'lucide-react';
+import { Activity, BarChart3, FolderKanban, RefreshCcw, Settings as SettingsIcon } from 'lucide-react';
 import Dashboard from './pages/Dashboard.jsx';
-import Campaigns from './pages/Campaigns.jsx';
+import Projects from './pages/Projects.jsx';
+import ProjectDetail from './pages/ProjectDetail.jsx';
 import CampaignDetail from './pages/CampaignDetail.jsx';
 import Settings from './pages/Settings.jsx';
 import { api } from './api.js';
 
 const tabs = [
   { id: 'dashboard', label: 'ダッシュボード', icon: BarChart3 },
-  { id: 'campaigns', label: 'キャンペーン', icon: MailPlus },
+  { id: 'projects', label: 'プロジェクト', icon: FolderKanban },
   { id: 'settings', label: 'GA4設定', icon: SettingsIcon }
 ];
 
 export default function App() {
   const [view, setView] = useState('dashboard');
+  const [currentProjectId, setCurrentProjectId] = useState(null);
   const [selectedCampaignId, setSelectedCampaignId] = useState(null);
   const [campaigns, setCampaigns] = useState([]);
+  const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  async function loadCampaigns() {
+  async function loadAll() {
     setError('');
     setLoading(true);
     try {
-      const data = await api.listCampaigns();
-      setCampaigns(data.campaigns || []);
+      const [campaignData, projectData] = await Promise.all([
+        api.listCampaigns(),
+        api.projects.list()
+      ]);
+      setCampaigns(campaignData.campaigns || []);
+      setProjects(projectData.projects || []);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -33,8 +40,8 @@ export default function App() {
   }
 
   useEffect(() => {
-    loadCampaigns();
-    const interval = window.setInterval(loadCampaigns, 15000);
+    loadAll();
+    const interval = window.setInterval(loadAll, 15000);
     return () => window.clearInterval(interval);
   }, []);
 
@@ -43,10 +50,33 @@ export default function App() {
     [campaigns, selectedCampaignId]
   );
 
-  function openCampaign(campaignId) {
-    setSelectedCampaignId(campaignId);
-    setView('detail');
+  const currentProject = useMemo(
+    () => projects.find((project) => project.id === currentProjectId),
+    [projects, currentProjectId]
+  );
+
+  function openProject(projectId) {
+    setCurrentProjectId(projectId);
+    setSelectedCampaignId(null);
+    setView('project');
   }
+
+  function openEmail(campaignId) {
+    setSelectedCampaignId(campaignId);
+    setView('email');
+  }
+
+  function openTab(tabId) {
+    setView(tabId);
+    if (tabId !== 'project') setCurrentProjectId(null);
+    if (tabId !== 'email') setSelectedCampaignId(null);
+  }
+
+  const title = view === 'project'
+    ? currentProject?.name || 'プロジェクト詳細'
+    : view === 'email'
+      ? selectedCampaign?.name || 'メール詳細'
+      : tabs.find((tab) => tab.id === view)?.label;
 
   return (
     <div className="app-shell">
@@ -55,7 +85,7 @@ export default function App() {
           <span className="brand-mark"><Activity size={22} /></span>
           <div>
             <strong>jcity Tracker</strong>
-            <span>GA4メールキャンペーン</span>
+            <span>メール配信分析</span>
           </div>
         </div>
         <nav className="nav">
@@ -65,7 +95,7 @@ export default function App() {
               <button
                 key={tab.id}
                 className={view === tab.id ? 'active' : ''}
-                onClick={() => setView(tab.id)}
+                onClick={() => openTab(tab.id)}
                 title={tab.label}
               >
                 <Icon size={18} />
@@ -80,9 +110,9 @@ export default function App() {
         <header className="topbar">
           <div>
             <p className="eyebrow">メールトラッキング管理</p>
-            <h1>{view === 'detail' ? selectedCampaign?.name || 'キャンペーン詳細' : tabs.find((tab) => tab.id === view)?.label}</h1>
+            <h1>{title}</h1>
           </div>
-          <button className="icon-button" onClick={loadCampaigns} disabled={loading} title="統計を更新">
+          <button className="icon-button" onClick={loadAll} disabled={loading} title="統計を更新">
             <RefreshCcw size={18} />
           </button>
         </header>
@@ -90,13 +120,26 @@ export default function App() {
         {error && <div className="alert">{error}</div>}
 
         {view === 'dashboard' && (
-          <Dashboard campaigns={campaigns} loading={loading} onOpenCampaign={openCampaign} />
+          <Dashboard campaigns={campaigns} loading={loading} onOpenCampaign={openEmail} />
         )}
-        {view === 'campaigns' && (
-          <Campaigns onCreated={loadCampaigns} campaigns={campaigns} onOpenCampaign={openCampaign} />
+        {view === 'projects' && (
+          <Projects projects={projects} onCreated={loadAll} onOpenProject={openProject} />
         )}
-        {view === 'detail' && (
-          <CampaignDetail campaignId={selectedCampaignId} fallback={selectedCampaign} onBack={() => setView('campaigns')} />
+        {view === 'project' && (
+          <ProjectDetail
+            projectId={currentProjectId}
+            fallback={currentProject}
+            onBack={() => setView('projects')}
+            onOpenEmail={openEmail}
+            onChanged={loadAll}
+          />
+        )}
+        {view === 'email' && (
+          <CampaignDetail
+            campaignId={selectedCampaignId}
+            fallback={selectedCampaign}
+            onBack={() => setView(currentProjectId ? 'project' : 'projects')}
+          />
         )}
         {view === 'settings' && <Settings />}
       </main>

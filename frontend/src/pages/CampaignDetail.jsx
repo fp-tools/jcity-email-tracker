@@ -1,5 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Copy, RefreshCcw } from 'lucide-react';
+import {
+  Bar,
+  BarChart,
+  Cell,
+  Legend,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis
+} from 'recharts';
 import { api } from '../api.js';
 
 function currentOrigin() {
@@ -11,6 +23,14 @@ const eventLabels = {
   click: 'クリック',
   conversion: 'コンバージョン'
 };
+
+const metricLabels = {
+  opens: '開封',
+  clicks: 'クリック',
+  conversions: 'コンバージョン'
+};
+
+const COLORS = ['#0d9488', '#6366f1', '#f59e0b', '#ef4444', '#64748b'];
 
 export default function CampaignDetail({ campaignId, fallback, onBack }) {
   const [campaign, setCampaign] = useState(fallback);
@@ -90,7 +110,7 @@ export default function CampaignDetail({ campaignId, fallback, onBack }) {
   }
 
   if (!campaignId) {
-    return <section className="panel"><p className="empty">キャンペーンを選択してください</p></section>;
+    return <section className="panel"><p className="empty">メールを選択してください</p></section>;
   }
 
   return (
@@ -105,9 +125,9 @@ export default function CampaignDetail({ campaignId, fallback, onBack }) {
           </div>
 
           <div className="metrics-grid">
-            <section className="metric"><span>ユニーク開封</span><strong>{campaign.open_rate}%</strong><small>{campaign.unique_opens} / {campaign.total_sent}</small></section>
-            <section className="metric"><span>ユニーククリック</span><strong>{campaign.click_rate}%</strong><small>{campaign.unique_clicks} 件</small></section>
-            <section className="metric"><span>コンバージョン</span><strong>{campaign.conversion_rate}%</strong><small>{campaign.unique_conversions} 件</small></section>
+            <section className="metric"><span>ユニーク開封率</span><strong>{campaign.open_rate}%</strong><small>{campaign.unique_opens} / {campaign.total_sent}</small></section>
+            <section className="metric"><span>ユニーククリック率</span><strong>{campaign.click_rate}%</strong><small>{campaign.unique_clicks} 件</small></section>
+            <section className="metric"><span>コンバージョン率</span><strong>{campaign.conversion_rate}%</strong><small>{campaign.unique_conversions} 件</small></section>
             <section className="metric"><span>ユニークメール数</span><strong>{campaign.unique_recipients}</strong><small>イベント発生メールID</small></section>
           </div>
 
@@ -145,9 +165,79 @@ export default function CampaignDetail({ campaignId, fallback, onBack }) {
                       </button>
                     </div>
                     <pre>{value}</pre>
-                    {copied === key && <small>コピー済み</small>}
+                    {copied === key && <small>コピーしました</small>}
                   </div>
                 ))}
+              </section>
+
+              {campaign.html_content && (
+                <section className="panel">
+                  <div className="panel-heading"><h2>メールプレビュー</h2></div>
+                  <iframe
+                    srcDoc={campaign.html_content}
+                    className="email-preview"
+                    sandbox="allow-same-origin"
+                    title="メールプレビュー"
+                  />
+                </section>
+              )}
+
+              <section className="panel chart-section">
+                <div className="panel-heading">
+                  <h2>時間帯別分析</h2>
+                </div>
+                <ResponsiveContainer width="100%" height={240}>
+                  <BarChart data={campaign.time_of_day || []}>
+                    <XAxis dataKey="hour" tickFormatter={(hour) => `${hour}時`} />
+                    <YAxis allowDecimals={false} />
+                    <Tooltip formatter={(value, name) => [value, metricLabels[name] || name]} />
+                    <Legend formatter={(value) => metricLabels[value] || value} />
+                    <Bar dataKey="opens" fill="#0d9488" name="opens" />
+                    <Bar dataKey="clicks" fill="#6366f1" name="clicks" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </section>
+
+              <section className="panel chart-section">
+                <div className="panel-heading">
+                  <h2>デバイス分析</h2>
+                </div>
+                <div className="device-charts">
+                  <div>
+                    <h3>デバイス</h3>
+                    <PieChart width={320} height={230}>
+                      <Pie
+                        data={campaign.devices || []}
+                        dataKey="count"
+                        nameKey="device_type"
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={80}
+                        label={({ device_type, percent }) => `${device_type} ${(percent * 100).toFixed(0)}%`}
+                      >
+                        {campaign.devices?.map((_, index) => <Cell key={index} fill={COLORS[index % COLORS.length]} />)}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </div>
+                  <div>
+                    <h3>OS</h3>
+                    <PieChart width={320} height={230}>
+                      <Pie
+                        data={campaign.os_breakdown || []}
+                        dataKey="count"
+                        nameKey="os"
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={80}
+                        label={({ os, percent }) => `${os} ${(percent * 100).toFixed(0)}%`}
+                      >
+                        {campaign.os_breakdown?.map((_, index) => <Cell key={index} fill={COLORS[index % COLORS.length]} />)}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </div>
+                </div>
               </section>
 
               <section className="panel">
@@ -158,7 +248,7 @@ export default function CampaignDetail({ campaignId, fallback, onBack }) {
                 <div className="table-wrap">
                   <table>
                     <thead>
-                      <tr><th>日時</th><th>種別</th><th>メールID</th><th>リンク</th><th>IPアドレス</th></tr>
+                      <tr><th>日時</th><th>種別</th><th>メールID</th><th>リンク</th><th>デバイス</th><th>OS</th><th>IPアドレス</th></tr>
                     </thead>
                     <tbody>
                       {campaign.recent_events?.map((event) => (
@@ -167,10 +257,12 @@ export default function CampaignDetail({ campaignId, fallback, onBack }) {
                           <td>{eventLabels[event.event_type] || event.event_type}</td>
                           <td>{event.email_id}</td>
                           <td>{event.link_id || '-'}</td>
+                          <td>{event.device_type || '-'}</td>
+                          <td>{event.os || '-'}</td>
                           <td>{event.ip_address || '-'}</td>
                         </tr>
                       ))}
-                      {!campaign.recent_events?.length && <tr><td colSpan="5" className="empty">まだイベントがありません</td></tr>}
+                      {!campaign.recent_events?.length && <tr><td colSpan="7" className="empty">まだイベントがありません</td></tr>}
                     </tbody>
                   </table>
                 </div>
@@ -201,9 +293,9 @@ export default function CampaignDetail({ campaignId, fallback, onBack }) {
                     {emailBreakdown.map((row) => (
                       <tr key={row.email_id}>
                         <td>{row.email_id}</td>
-                        <td>{row.opened ? '✓' : '-'}</td>
-                        <td>{row.clicked ? '✓' : '-'}</td>
-                        <td>{row.converted ? '✓' : '-'}</td>
+                        <td>{row.opened ? 'あり' : '-'}</td>
+                        <td>{row.clicked ? 'あり' : '-'}</td>
+                        <td>{row.converted ? 'あり' : '-'}</td>
                         <td>{row.last_event_at ? new Date(row.last_event_at).toLocaleString('ja-JP') : '-'}</td>
                       </tr>
                     ))}

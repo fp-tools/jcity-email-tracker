@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import campaignsRouter from './routes/campaigns.js';
 import configRouter from './routes/config.js';
+import projectsRouter from './routes/projects.js';
 import trackingRouter from './routes/tracking.js';
 
 const app = express();
@@ -18,10 +19,11 @@ app.use(helmet({ crossOriginResourcePolicy: false }));
 app.use(cors({
   origin: process.env.CORS_ORIGIN?.split(',').map((origin) => origin.trim()).filter(Boolean) || true
 }));
-app.use(express.json({ limit: '200kb' }));
+app.use(express.json({ limit: '2mb' }));
 
 app.get('/health', (req, res) => res.json({ ok: true }));
 app.use(trackingRouter);
+app.use('/api', projectsRouter);
 app.use('/api', campaignsRouter);
 app.use('/api', configRouter);
 
