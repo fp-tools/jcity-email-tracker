@@ -51,7 +51,7 @@ export default function Dashboard({ campaigns, loading, onOpenCampaign }) {
                 <tr key={campaign.id} onClick={() => onOpenCampaign(campaign.id)}>
                   <td>
                     <strong>{campaign.name}</strong>
-                    <small>{campaign.subject || campaign.jcity_id || campaign.id}</small>
+                    <small>{campaign.jcity_id ? `配信日: ${campaign.jcity_id}` : campaign.subject || campaign.id}</small>
                   </td>
                   <td>{campaign.total_sent.toLocaleString()}</td>
                   <td>{campaign.open_rate}%</td>

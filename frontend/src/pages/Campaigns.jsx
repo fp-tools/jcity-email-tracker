@@ -37,12 +37,12 @@ export default function Campaigns({ campaigns, onCreated, onOpenCampaign }) {
             <input value={form.name} onChange={update('name')} placeholder="6月ニュースレター" required />
           </label>
           <label>
-            <span>件名</span>
+            <span>件名（管理用メモ）</span>
             <input value={form.subject} onChange={update('subject')} placeholder="jcityのメール件名" />
           </label>
           <label>
-            <span>jcityキャンペーンID</span>
-            <input value={form.jcity_id} onChange={update('jcity_id')} placeholder="JCT-2026-06" />
+            <span>配信日</span>
+            <input value={form.jcity_id} onChange={update('jcity_id')} type="date" />
           </label>
           <label>
             <span>配信数</span>
@@ -64,7 +64,7 @@ export default function Campaigns({ campaigns, onCreated, onOpenCampaign }) {
           {campaigns.map((campaign) => (
             <button key={campaign.id} onClick={() => onOpenCampaign(campaign.id)}>
               <strong>{campaign.name}</strong>
-              <span>{campaign.total_sent.toLocaleString()} 配信数 / {campaign.open_rate}% 開封 / {campaign.click_rate}% クリック</span>
+              <span>{campaign.jcity_id ? `📅 ${campaign.jcity_id} ・` : ''}{campaign.total_sent.toLocaleString()} 配信 / {campaign.open_rate}% 開封 / {campaign.click_rate}% クリック</span>
             </button>
           ))}
           {!campaigns.length && <p className="empty">キャンペーンを作成してスニペットを生成しましょう</p>}
