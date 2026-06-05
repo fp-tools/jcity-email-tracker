@@ -22,6 +22,10 @@ const post = (path, payload) => request(path, {
   method: 'POST',
   body: JSON.stringify(payload)
 });
+const patch = (path, payload) => request(path, {
+  method: 'PATCH',
+  body: JSON.stringify(payload)
+});
 const del = (path) => request(path, { method: 'DELETE' });
 
 export const api = {
@@ -34,8 +38,10 @@ export const api = {
   },
   listCampaigns: () => get('/api/campaigns'),
   createCampaign: (payload) => post('/api/campaigns', payload),
+  updateCampaign: (id, payload) => patch(`/api/campaigns/${encodeURIComponent(id)}`, payload),
   campaignStats: (id) => get(`/api/campaigns/${encodeURIComponent(id)}/stats`),
   emailBreakdown: (id) => get(`/api/campaigns/${encodeURIComponent(id)}/email-breakdown`),
+  campaignHeatmap: (id) => get(`/api/campaigns/${encodeURIComponent(id)}/heatmap`),
   getGa4: () => get('/api/config/ga4'),
   saveGa4: (payload) => post('/api/config/ga4', payload)
 };

@@ -554,6 +554,176 @@ pre {
   padding: 22px 10px;
 }
 
+.sent-editor {
+  padding: 14px 18px;
+}
+
+.sent-editor-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.sent-info {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.sent-label {
+  color: #62727a;
+  font-size: 13px;
+}
+
+.sent-info strong {
+  font-size: 20px;
+}
+
+.sent-hint {
+  color: #b06a12;
+  font-size: 13px;
+  font-style: normal;
+}
+
+.sent-edit-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sent-edit-controls input {
+  width: 140px;
+}
+
+.field-hint {
+  color: #718089;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.guide {
+  background: #f3faf9;
+  border-color: #bfe6df;
+}
+
+.guide-intro {
+  margin: 0 0 14px;
+  color: #3a4a52;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.guide-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 12px;
+  counter-reset: none;
+}
+
+.guide-steps li {
+  display: grid;
+  gap: 3px;
+  padding: 12px 14px;
+  background: white;
+  border: 1px solid #d7e8e4;
+  border-radius: 8px;
+}
+
+.guide-steps strong {
+  font-size: 14px;
+  color: #12613f;
+}
+
+.guide-steps span {
+  font-size: 13px;
+  color: #52636b;
+  line-height: 1.6;
+}
+
+code {
+  background: #e7eef0;
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: #1b3a44;
+  word-break: break-word;
+}
+
+.heatmap-caveat {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #9a3412;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.heatmap-caveat svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.heatmap-stage {
+  position: relative;
+  width: 100%;
+  max-width: 680px;
+  margin: 0 auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.heatmap-iframe {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: white;
+}
+
+.heatmap-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.heatmap-zone {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-radius: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  mix-blend-mode: multiply;
+}
+
+.heatmap-zone-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #7f1d1d;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 4px;
+  padding: 0 5px;
+  margin-right: 6px;
+}
+
+.heatmap-band {
+  position: absolute;
+  left: 0;
+  right: 0;
+  mix-blend-mode: multiply;
+}
+
 @media (max-width: 920px) {
   .app-shell {
     grid-template-columns: 1fr;

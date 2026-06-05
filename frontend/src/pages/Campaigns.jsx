@@ -45,8 +45,9 @@ export default function Campaigns({ campaigns, onCreated, onOpenCampaign }) {
             <input value={form.jcity_id} onChange={update('jcity_id')} type="date" />
           </label>
           <label>
-            <span>配信数</span>
-            <input value={form.total_sent} onChange={update('total_sent')} type="number" min="0" placeholder="12000" />
+            <span>配信数（任意・送信後に入力可）</span>
+            <input value={form.total_sent} onChange={update('total_sent')} type="number" min="0" placeholder="送信後に入力できます" />
+            <small className="field-hint">実際の配信数は配信後に確定します。空のまま作成し、後でキャンペーン詳細から入力できます。</small>
           </label>
           <button className="primary" disabled={saving}>
             <Plus size={18} />

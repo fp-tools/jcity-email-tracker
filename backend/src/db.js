@@ -150,6 +150,12 @@ const listEmailsByProjectStmt = db.prepare(`
 
 const getCampaignStmt = db.prepare('SELECT * FROM campaigns WHERE id = ?');
 
+const updateCampaignStmt = db.prepare(`
+  UPDATE campaigns
+  SET name = @name, subject = @subject, jcity_id = @jcity_id, total_sent = @total_sent
+  WHERE id = @id
+`);
+
 const insertEventStmt = db.prepare(`
   INSERT INTO email_events (campaign_id, email_id, event_type, link_id, ip_address, user_agent, device_type, os)
   VALUES (@campaign_id, @email_id, @event_type, @link_id, @ip_address, @user_agent, @device_type, @os)
@@ -203,6 +209,17 @@ const osBreakdownStmt = db.prepare(`
   FROM email_events
   WHERE campaign_id = ? AND event_type = 'open'
   GROUP BY COALESCE(os, 'unknown')
+`);
+
+const clicksByLinkStmt = db.prepare(`
+  SELECT
+    link_id,
+    COUNT(*) AS clicks,
+    COUNT(DISTINCT email_id) AS unique_clicks
+  FROM email_events
+  WHERE campaign_id = ? AND event_type = 'click' AND link_id IS NOT NULL AND link_id <> ''
+  GROUP BY link_id
+  ORDER BY clicks DESC
 `);
 
 const emailBreakdownStmt = db.prepare(`
@@ -342,6 +359,31 @@ export function createCampaign(input) {
   return getCampaignStmt.get(campaign.id);
 }
 
+export function updateCampaign(id, input = {}) {
+  const existing = getCampaignStmt.get(id);
+  if (!existing) return null;
+
+  const next = {
+    id,
+    name: input.name !== undefined ? String(input.name).trim() : existing.name,
+    subject: input.subject !== undefined ? String(input.subject).trim() : existing.subject,
+    jcity_id: input.jcity_id !== undefined ? String(input.jcity_id).trim() : existing.jcity_id,
+    total_sent:
+      input.total_sent !== undefined
+        ? Math.max(0, Number.parseInt(input.total_sent, 10) || 0)
+        : existing.total_sent
+  };
+
+  if (!next.name) {
+    const error = new Error('Campaign name is required');
+    error.status = 400;
+    throw error;
+  }
+
+  updateCampaignStmt.run(next);
+  return getCampaignStmt.get(id);
+}
+
 export function listCampaigns() {
   return listCampaignsStmt.all().map(withRates);
 }
@@ -384,6 +426,14 @@ export function getCampaignStats(id, limit = 100) {
 
 export function listEmailsByProject(projectId) {
   return listEmailsByProjectStmt.all(projectId).map(withRates);
+}
+
+export function getClicksByLink(campaignId) {
+  return clicksByLinkStmt.all(campaignId).map((row) => ({
+    link_id: row.link_id,
+    clicks: Number(row.clicks || 0),
+    unique_clicks: Number(row.unique_clicks || 0)
+  }));
 }
 
 export function getEmailBreakdown(campaignId) {

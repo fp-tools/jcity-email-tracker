@@ -13,6 +13,7 @@ import {
   YAxis
 } from 'recharts';
 import { api } from '../api.js';
+import EmailHeatmap from '../components/EmailHeatmap.jsx';
 
 function currentOrigin() {
   return window.location.origin;
@@ -42,6 +43,9 @@ export default function CampaignDetail({ campaignId, fallback, onBack }) {
   const [activeTab, setActiveTab] = useState('stats');
   const [emailBreakdown, setEmailBreakdown] = useState([]);
   const [emailsLoading, setEmailsLoading] = useState(false);
+  const [editingSent, setEditingSent] = useState(false);
+  const [sentDraft, setSentDraft] = useState('');
+  const [savingSent, setSavingSent] = useState(false);
 
   async function loadStats() {
     if (!campaignId) return;
@@ -103,6 +107,25 @@ export default function CampaignDetail({ campaignId, fallback, onBack }) {
     return { pixel, link, conversion };
   }, [campaign, baseUrl, destinationUrl, linkId]);
 
+  function startEditSent() {
+    setSentDraft(campaign?.total_sent ? String(campaign.total_sent) : '');
+    setEditingSent(true);
+  }
+
+  async function saveTotalSent() {
+    setSavingSent(true);
+    setError('');
+    try {
+      await api.updateCampaign(campaignId, { total_sent: Number.parseInt(sentDraft, 10) || 0 });
+      await loadStats();
+      setEditingSent(false);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSavingSent(false);
+    }
+  }
+
   async function copy(text, key) {
     await navigator.clipboard.writeText(text);
     setCopied(key);
@@ -122,7 +145,43 @@ export default function CampaignDetail({ campaignId, fallback, onBack }) {
           <div className="tabs">
             <button className={activeTab === 'stats' ? 'active' : ''} onClick={() => setActiveTab('stats')}>概要</button>
             <button className={activeTab === 'emails' ? 'active' : ''} onClick={() => setActiveTab('emails')}>メール別詳細</button>
+            <button className={activeTab === 'heatmap' ? 'active' : ''} onClick={() => setActiveTab('heatmap')}>ヒートマップ</button>
           </div>
+
+          <section className="panel sent-editor">
+            <div className="sent-editor-row">
+              <div className="sent-info">
+                <span className="sent-label">配信数</span>
+                {campaign.total_sent > 0 ? (
+                  <strong>{campaign.total_sent.toLocaleString()} 通</strong>
+                ) : (
+                  <em className="sent-hint">未入力 — 配信後に実際の配信数を入力してください</em>
+                )}
+              </div>
+              {editingSent ? (
+                <div className="sent-edit-controls">
+                  <input
+                    type="number"
+                    min="0"
+                    value={sentDraft}
+                    onChange={(event) => setSentDraft(event.target.value)}
+                    placeholder="12000"
+                    autoFocus
+                  />
+                  <button className="primary" onClick={saveTotalSent} disabled={savingSent}>
+                    {savingSent ? '保存中...' : '保存'}
+                  </button>
+                  <button className="ghost" onClick={() => setEditingSent(false)} disabled={savingSent}>
+                    キャンセル
+                  </button>
+                </div>
+              ) : (
+                <button className="ghost" onClick={startEditSent}>
+                  {campaign.total_sent > 0 ? '配信数を編集' : '配信数を入力'}
+                </button>
+              )}
+            </div>
+          </section>
 
           <div className="metrics-grid">
             <section className="metric"><span>ユニーク開封率</span><strong>{campaign.open_rate}%</strong><small>{campaign.unique_opens} / {campaign.total_sent}</small></section>
@@ -133,6 +192,38 @@ export default function CampaignDetail({ campaignId, fallback, onBack }) {
 
           {activeTab === 'stats' && (
             <>
+              <section className="panel guide">
+                <div className="panel-heading">
+                  <h2>📋 メールへの埋め込み手順</h2>
+                </div>
+                <p className="guide-intro">
+                  下のスニペットを jcity のHTMLメールに貼るだけで、開封・クリック・コンバージョンを自動計測します。
+                  <code>{'{{EMAIL_ID}}'}</code> は jcity が配信時に各受信者ごとのIDへ自動で置き換えます（そのまま貼ってください）。
+                </p>
+                <ol className="guide-steps">
+                  <li>
+                    <strong>① トラッキングドメインを設定</strong>
+                    <span>下の「トラッキングドメイン」を、このアプリを公開したURL（例: <code>https://your-app.fly.dev</code>）に変更します。ローカルのままだと配信先で計測できません。</span>
+                  </li>
+                  <li>
+                    <strong>② 開封ピクセルを貼る</strong>
+                    <span>「開封トラッキングPixel」をコピーし、メールHTMLの <code>&lt;/body&gt;</code> 直前に貼り付けます。透明な1pxの画像なので見た目には影響しません。</span>
+                  </li>
+                  <li>
+                    <strong>③ リンクを差し替える</strong>
+                    <span>計測したいリンクを「クリックトラッキングリンク」の形に置き換えます。「リンクID」と「遷移先URL」を変えれば複数のリンクを個別に計測できます。</span>
+                  </li>
+                  <li>
+                    <strong>④ コンバージョンを計測（任意）</strong>
+                    <span>申込・購入完了などのLP（遷移先ページ）に「CVスクリプト」を貼ると、成果(CV)まで計測できます。</span>
+                  </li>
+                  <li>
+                    <strong>⑤ 配信後に配信数を入力</strong>
+                    <span>配信が完了して実数が確定したら、この画面上部の「配信数を入力」から実際の配信数を入れると開封率・クリック率が正しく計算されます。</span>
+                  </li>
+                </ol>
+              </section>
+
               <section className="panel">
                 <div className="panel-heading">
                   <h2>jcityスニペット</h2>
@@ -307,6 +398,8 @@ export default function CampaignDetail({ campaignId, fallback, onBack }) {
               </div>
             </section>
           )}
+
+          {activeTab === 'heatmap' && <EmailHeatmap campaignId={campaignId} />}
         </>
       )}
     </div>
