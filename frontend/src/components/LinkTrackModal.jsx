@@ -3,18 +3,24 @@ import { X } from 'lucide-react';
 
 // /click/<campaignId>/<emailId>/<linkId>?...url=ENCODED を解析（既存の計測リンク判定）
 function trackingInfo(href = '') {
-  const m = href.match(/\/click\/([^/]+)\/[^/]+\/[^/?#]+\?(?:[^#]*&)?url=([^&#]+)/);
+  const m = href.match(/\/click\/([^/]+)\/[^/]+\/([^/?#]+)\?(?:[^#]*&)?url=([^&#]+)/);
   if (!m) return null;
-  let url = m[2];
+  let url = m[3];
   try {
-    url = decodeURIComponent(m[2]);
+    url = decodeURIComponent(m[3]);
   } catch {
     /* デコード不能ならそのまま */
   }
-  return { campaignId: m[1], url };
+  let linkId = m[2];
+  try {
+    linkId = decodeURIComponent(m[2]);
+  } catch {
+    /* そのまま */
+  }
+  return { campaignId: m[1], linkId, url };
 }
 
-// 計測リンクに入れる「元URL」。別キャンペーンの計測リンクは中のURLに復元（二重ラップ防止）
+// 計測リンクに入れる「元URL」。既存の計測リンクは中のURL（変数含む）に復元（二重ラップ防止）
 const effectiveUrl = (href) => {
   const info = trackingInfo(href);
   return info ? info.url : href;
@@ -22,12 +28,8 @@ const effectiveUrl = (href) => {
 
 function isTrackable(href, campaignId) {
   const info = trackingInfo(href);
-  if (info) {
-    // このキャンペーンの計測リンクは変換済み → 対象外
-    if (info.campaignId === campaignId) return false;
-    // 別キャンペーン（別メール）の計測リンク → 中の元URLを再変換対象にする
-    return /^https?:\/\//i.test(info.url);
-  }
+  // 既存の計測リンク（このメール/他メール問わず）は再変換対象として表示する
+  if (info) return true;
   return /^https?:\/\//i.test(href);
 }
 
@@ -87,8 +89,9 @@ function extractOccurrences(html, campaignId) {
 }
 
 // plan: 出現順index -> linkId（null はスキップ）で書き換え
-// 戻り値: { html, links:[{ linkId, url, trackingUrl }] }
-function buildHtml(html, base, campaignId, plan, labelByLinkId = {}) {
+// destPlan: 出現順index -> 遷移先URL（編集後）。http(s)以外（jcity変数等）は素のまま入れる
+// 戻り値: { html, links:[{ linkId, url, trackingUrl, label }] }
+function buildHtml(html, base, campaignId, plan, labelByLinkId = {}, destPlan = []) {
   const cleanBase = (base || '').replace(/\/$/, '');
   let doc;
   try {
@@ -96,15 +99,17 @@ function buildHtml(html, base, campaignId, plan, labelByLinkId = {}) {
   } catch {
     return { html: html || '', links: [] };
   }
-  const makeUrl = (linkId, originalUrl) =>
-    `${cleanBase}/click/${campaignId}/{{EMAIL_ID}}/${encodeURIComponent(linkId)}?url=${encodeURIComponent(originalUrl)}`;
+  // http(s)の実URLはエンコード、jcity変数などはそのまま（受信者ごとに置換させるため）
+  const encodeDest = (dest) => (/^https?:\/\//i.test(dest) ? encodeURIComponent(dest) : dest);
+  const makeUrl = (linkId, dest) =>
+    `${cleanBase}/click/${campaignId}/{{EMAIL_ID}}/${encodeURIComponent(linkId)}?url=${encodeDest(dest)}`;
 
   const links = [];
   const seen = new Set();
-  const pushLink = (linkId, originalUrl, trackingUrl) => {
+  const pushLink = (linkId, dest, trackingUrl) => {
     if (seen.has(linkId)) return;
     seen.add(linkId);
-    links.push({ linkId, url: originalUrl, trackingUrl, label: labelByLinkId[linkId] || linkId });
+    links.push({ linkId, url: dest, trackingUrl, label: labelByLinkId[linkId] || linkId });
   };
 
   let i = -1;
@@ -113,9 +118,10 @@ function buildHtml(html, base, campaignId, plan, labelByLinkId = {}) {
       i += 1;
       const linkId = plan[i];
       if (!linkId) continue;
-      const trackingUrl = makeUrl(linkId, t.url);
+      const dest = destPlan[i] || t.url;
+      const trackingUrl = makeUrl(linkId, dest);
       t.node.setAttribute('href', trackingUrl);
-      pushLink(linkId, t.url, trackingUrl);
+      pushLink(linkId, dest, trackingUrl);
     } else {
       // テキストノードを分割し、変換対象URLを <a> に置き換える
       const text = t.node.nodeValue || '';
@@ -129,12 +135,13 @@ function buildHtml(html, base, campaignId, plan, labelByLinkId = {}) {
         if (!linkId) {
           frag.appendChild(doc.createTextNode(text.slice(mt.index, mt.index + mt.length)));
         } else {
-          const trackingUrl = makeUrl(linkId, mt.url);
+          const dest = destPlan[i] || mt.url;
+          const trackingUrl = makeUrl(linkId, dest);
           const a = doc.createElement('a');
           a.setAttribute('href', trackingUrl);
           a.textContent = mt.url;
           frag.appendChild(a);
-          pushLink(linkId, mt.url, trackingUrl);
+          pushLink(linkId, dest, trackingUrl);
           replaced = true;
         }
         cursor = mt.index + mt.length;
@@ -160,6 +167,7 @@ export default function LinkTrackModal({ html, baseUrl, campaignId, onApply, onC
       const guess = occ[0].text && occ[0].text.length <= 20 ? occ[0].text : fallback;
       return {
         url,
+        dest: url,
         occ,
         selected: true,
         split: false,
@@ -215,15 +223,18 @@ export default function LinkTrackModal({ html, baseUrl, campaignId, onApply, onC
       return id;
     };
 
+    const destPlan = occurrences.map(() => null);
     const labelByLinkId = {};
     groups.forEach((g, gi) => {
       if (!g.selected) return;
+      const dest = (g.dest || g.url || '').trim() || g.url;
       if (g.split) {
         // 各箇所を別イベントとして個別の linkId にする
         g.occ.forEach((o, oi) => {
           const label = (g.names[oi] || '').trim() || `link-${gi + 1}-${oi + 1}`;
           const id = uniqueId(g.names[oi] || `link-${gi + 1}-${oi + 1}`);
           plan[o.idx] = id;
+          destPlan[o.idx] = dest;
           labelByLinkId[id] = label;
         });
       } else {
@@ -232,11 +243,12 @@ export default function LinkTrackModal({ html, baseUrl, campaignId, onApply, onC
         const id = uniqueId(g.name || `link-${gi + 1}`);
         g.occ.forEach((o) => {
           plan[o.idx] = id;
+          destPlan[o.idx] = dest;
         });
         labelByLinkId[id] = label;
       }
     });
-    const result = buildHtml(html, baseUrl, campaignId, plan, labelByLinkId);
+    const result = buildHtml(html, baseUrl, campaignId, plan, labelByLinkId, destPlan);
     onApply(result.html, result.links);
   }
 
@@ -278,6 +290,14 @@ export default function LinkTrackModal({ html, baseUrl, campaignId, onApply, onC
 
                     {g.selected && (
                       <div className="lc-config">
+                        <label className="lc-name">
+                          <span>遷移先URL（受信者別に出し分ける場合はjcityの変数を入力）</span>
+                          <input
+                            value={g.dest}
+                            onChange={(event) => patchGroup(g.url, { dest: event.target.value })}
+                            placeholder="https://example.com/ または *URL* 等のjcity変数"
+                          />
+                        </label>
                         {g.occ.length > 1 && (
                           <div className="lc-split-choice">
                             <label className="lc-split">

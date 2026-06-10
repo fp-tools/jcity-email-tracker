@@ -93,6 +93,14 @@ db.exec(`
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (campaign_id, link_id)
   );
+
+  CREATE TABLE IF NOT EXISTS target_labels (
+    campaign_id TEXT NOT NULL,
+    target_url TEXT NOT NULL,
+    label TEXT NOT NULL DEFAULT '',
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (campaign_id, target_url)
+  );
 `);
 
 // LINE Messaging API 連携（プロジェクト単位の設定 + クリック推定紐付け）
@@ -655,6 +663,34 @@ export function saveLinkLabels(campaignId, labels = []) {
 export function getLinkLabels(campaignId) {
   const map = {};
   for (const row of linkLabelsStmt.all(campaignId)) map[row.link_id] = row.label;
+  return map;
+}
+
+const upsertTargetLabelStmt = db.prepare(`
+  INSERT INTO target_labels (campaign_id, target_url, label, updated_at)
+  VALUES (@campaign_id, @target_url, @label, CURRENT_TIMESTAMP)
+  ON CONFLICT(campaign_id, target_url) DO UPDATE SET label = excluded.label, updated_at = CURRENT_TIMESTAMP
+`);
+const targetLabelsStmt = db.prepare('SELECT target_url, label FROM target_labels WHERE campaign_id = ?');
+
+export function saveTargetLabels(campaignId, labels = []) {
+  const rows = (Array.isArray(labels) ? labels : []).filter((l) => l && l.target_url);
+  const tx = db.transaction(() => {
+    for (const l of rows) {
+      upsertTargetLabelStmt.run({
+        campaign_id: campaignId,
+        target_url: String(l.target_url),
+        label: String(l.label || '').trim()
+      });
+    }
+  });
+  tx();
+  return getTargetLabels(campaignId);
+}
+
+export function getTargetLabels(campaignId) {
+  const map = {};
+  for (const row of targetLabelsStmt.all(campaignId)) map[row.target_url] = row.label;
   return map;
 }
 

@@ -26,7 +26,25 @@ export default function EmailHeatmap({ campaignId }) {
   const [mode, setMode] = useState('click'); // 'click' | 'read'
   const [zones, setZones] = useState([]);
   const [docHeight, setDocHeight] = useState(0);
+  const [targetLabels, setTargetLabels] = useState({});
+  const [savingTargets, setSavingTargets] = useState(false);
+  const [targetsSaved, setTargetsSaved] = useState(false);
   const iframeRef = useRef(null);
+
+  async function saveTargets() {
+    setSavingTargets(true);
+    setError('');
+    try {
+      const labels = Object.entries(targetLabels).map(([target_url, label]) => ({ target_url, label }));
+      await api.saveTargetLabels(campaignId, labels);
+      setTargetsSaved(true);
+      window.setTimeout(() => setTargetsSaved(false), 1500);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSavingTargets(false);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -37,7 +55,10 @@ export default function EmailHeatmap({ campaignId }) {
     api
       .campaignHeatmap(campaignId)
       .then((d) => {
-        if (!cancelled) setData(d);
+        if (!cancelled) {
+          setData(d);
+          setTargetLabels(d.target_labels || {});
+        }
       })
       .catch((err) => {
         if (!cancelled) setError(err.message);
@@ -256,15 +277,28 @@ export default function EmailHeatmap({ campaignId }) {
               <div className="table-wrap">
                 <div className="panel-heading" style={{ marginTop: 8 }}>
                   <h3 style={{ margin: 0 }}>リンク先別クリック（受信者別URL出し分け）</h3>
+                  <button className="ghost" onClick={saveTargets} disabled={savingTargets}>
+                    {targetsSaved ? '保存しました' : savingTargets ? '保存中...' : 'イベント名を保存'}
+                  </button>
                 </div>
+                <p className="panel-note">遷移先URLごとにイベント名を付けられます（例: .com/1=「○○用」, .com/2=「□□用」）。</p>
                 <table>
                   <thead>
                     <tr><th>イベント名</th><th>遷移先URL</th><th>クリック</th><th>ユニーク</th></tr>
                   </thead>
                   <tbody>
                     {data.clicks_by_target.map((row, i) => (
-                      <tr key={`${row.link_id}-${i}`}>
-                        <td><strong>{data?.labels?.[row.link_id] || row.link_id || '-'}</strong></td>
+                      <tr key={`${row.target_url}-${i}`}>
+                        <td>
+                          <input
+                            className="target-label-input"
+                            value={targetLabels[row.target_url] || ''}
+                            onChange={(e) =>
+                              setTargetLabels((prev) => ({ ...prev, [row.target_url]: e.target.value }))
+                            }
+                            placeholder="例: ○○用"
+                          />
+                        </td>
                         <td className="cl-dest-cell">{row.target_url}</td>
                         <td>{row.clicks}</td>
                         <td>{row.unique_clicks}</td>

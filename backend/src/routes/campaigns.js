@@ -1,5 +1,5 @@
 import express from 'express';
-import { createCampaign, deleteCampaign, getCampaign, getCampaignStats, getClicksByLink, getClicksByTarget, getConversionsByLink, getEmailBreakdown, getLinkLabels, listCampaigns, saveLinkLabels, updateCampaign } from '../db.js';
+import { createCampaign, deleteCampaign, getCampaign, getCampaignStats, getClicksByLink, getClicksByTarget, getConversionsByLink, getEmailBreakdown, getLinkLabels, getTargetLabels, listCampaigns, saveLinkLabels, saveTargetLabels, updateCampaign } from '../db.js';
 
 const router = express.Router();
 
@@ -52,7 +52,8 @@ router.get('/campaigns/:id/heatmap', (req, res) => {
     clicks_by_link: getClicksByLink(req.params.id),
     conversions_by_link: getConversionsByLink(req.params.id),
     clicks_by_target: getClicksByTarget(req.params.id),
-    labels: getLinkLabels(req.params.id)
+    labels: getLinkLabels(req.params.id),
+    target_labels: getTargetLabels(req.params.id)
   });
 });
 
@@ -60,6 +61,15 @@ router.post('/campaigns/:id/link-labels', (req, res, next) => {
   try {
     const labels = saveLinkLabels(req.params.id, (req.body || {}).labels || []);
     res.json({ labels });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/campaigns/:id/target-labels', (req, res, next) => {
+  try {
+    const target_labels = saveTargetLabels(req.params.id, (req.body || {}).labels || []);
+    res.json({ target_labels });
   } catch (error) {
     next(error);
   }
