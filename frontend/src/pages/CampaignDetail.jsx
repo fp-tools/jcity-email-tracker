@@ -17,6 +17,7 @@ import { api } from '../api.js';
 import EmailHeatmap from '../components/EmailHeatmap.jsx';
 import HtmlEditor from '../components/HtmlEditor.jsx';
 import LinkTrackModal from '../components/LinkTrackModal.jsx';
+import ConvertedLinks from '../components/ConvertedLinks.jsx';
 
 function currentOrigin() {
   return window.location.origin;
@@ -67,6 +68,7 @@ export default function CampaignDetail() {
   const [deleting, setDeleting] = useState(false);
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
+  const [convertedLinks, setConvertedLinks] = useState([]);
 
   function onBack() {
     if (campaign?.project_id) navigate(`/projects/${campaign.project_id}`);
@@ -107,6 +109,7 @@ export default function CampaignDetail() {
     setEmailBreakdown([]);
     setEditingInfo(false);
     setShowLinkModal(false);
+    setConvertedLinks([]);
   }, [campaignId]);
 
   useEffect(() => {
@@ -318,6 +321,7 @@ export default function CampaignDetail() {
               </form>
             </section>
           )}
+          {editingInfo && <ConvertedLinks links={convertedLinks} />}
           <div className="metrics-grid">
             <section className="metric"><span>ユニーク開封率</span><strong>{campaign.open_rate}%</strong><small>{campaign.unique_opens} / {campaign.total_sent}</small></section>
             <section className="metric"><span>ユニーククリック率</span><strong>{campaign.click_rate}%</strong><small>{campaign.unique_clicks} 件</small></section>
@@ -554,8 +558,9 @@ export default function CampaignDetail() {
           baseUrl={baseUrl}
           campaignId={campaignId}
           onClose={() => setShowLinkModal(false)}
-          onApply={(html) => {
+          onApply={(html, links) => {
             setInfoDraft((current) => ({ ...current, html_content: html }));
+            setConvertedLinks(links || []);
             setShowLinkModal(false);
           }}
         />

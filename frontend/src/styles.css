@@ -746,6 +746,39 @@ textarea:focus {
   gap: 4px;
 }
 
+.converted-links {
+  display: grid;
+  gap: 10px;
+}
+
+.converted-link {
+  border: 1px solid #e2e8ea;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.converted-link-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.converted-link-head strong {
+  font-size: 13px;
+  color: #17202a;
+}
+
+.converted-link-head .cl-dest {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: #718089;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .lc-split-hint {
   margin: 0;
   padding-left: 26px;

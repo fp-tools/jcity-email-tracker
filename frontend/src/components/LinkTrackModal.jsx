@@ -87,16 +87,25 @@ function extractOccurrences(html, campaignId) {
 }
 
 // plan: 出現順index -> linkId（null はスキップ）で書き換え
+// 戻り値: { html, links:[{ linkId, url, trackingUrl }] }
 function buildHtml(html, base, campaignId, plan) {
   const cleanBase = (base || '').replace(/\/$/, '');
   let doc;
   try {
     doc = new DOMParser().parseFromString(html || '', 'text/html');
   } catch {
-    return html || '';
+    return { html: html || '', links: [] };
   }
   const makeUrl = (linkId, originalUrl) =>
     `${cleanBase}/click/${campaignId}/{{EMAIL_ID}}/${encodeURIComponent(linkId)}?url=${encodeURIComponent(originalUrl)}`;
+
+  const links = [];
+  const seen = new Set();
+  const pushLink = (linkId, originalUrl, trackingUrl) => {
+    if (seen.has(linkId)) return;
+    seen.add(linkId);
+    links.push({ linkId, url: originalUrl, trackingUrl });
+  };
 
   let i = -1;
   for (const t of collectTargets(doc.body, campaignId)) {
@@ -104,7 +113,9 @@ function buildHtml(html, base, campaignId, plan) {
       i += 1;
       const linkId = plan[i];
       if (!linkId) continue;
-      t.node.setAttribute('href', makeUrl(linkId, t.url));
+      const trackingUrl = makeUrl(linkId, t.url);
+      t.node.setAttribute('href', trackingUrl);
+      pushLink(linkId, t.url, trackingUrl);
     } else {
       // テキストノードを分割し、変換対象URLを <a> に置き換える
       const text = t.node.nodeValue || '';
@@ -118,10 +129,12 @@ function buildHtml(html, base, campaignId, plan) {
         if (!linkId) {
           frag.appendChild(doc.createTextNode(text.slice(mt.index, mt.index + mt.length)));
         } else {
+          const trackingUrl = makeUrl(linkId, mt.url);
           const a = doc.createElement('a');
-          a.setAttribute('href', makeUrl(linkId, mt.url));
+          a.setAttribute('href', trackingUrl);
           a.textContent = mt.url;
           frag.appendChild(a);
+          pushLink(linkId, mt.url, trackingUrl);
           replaced = true;
         }
         cursor = mt.index + mt.length;
@@ -130,7 +143,7 @@ function buildHtml(html, base, campaignId, plan) {
       if (replaced && t.node.parentNode) t.node.parentNode.replaceChild(frag, t.node);
     }
   }
-  return doc.body.innerHTML;
+  return { html: doc.body.innerHTML, links };
 }
 
 export default function LinkTrackModal({ html, baseUrl, campaignId, onApply, onClose }) {
@@ -217,7 +230,8 @@ export default function LinkTrackModal({ html, baseUrl, campaignId, onApply, onC
         });
       }
     });
-    onApply(buildHtml(html, baseUrl, campaignId, plan));
+    const result = buildHtml(html, baseUrl, campaignId, plan);
+    onApply(result.html, result.links);
   }
 
   return (

@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useOutletContext, useParams } from 'react-router-dom';
-import { ArrowLeft, Check, Copy, MailPlus, MessageCircle, RefreshCcw, Trash2 } from 'lucide-react';
+import { ArrowLeft, Check, Copy, Link as LinkIcon, MailPlus, MessageCircle, RefreshCcw, Trash2 } from 'lucide-react';
 import { api } from '../api.js';
 import HtmlEditor from '../components/HtmlEditor.jsx';
+import LinkTrackModal from '../components/LinkTrackModal.jsx';
+import ConvertedLinks from '../components/ConvertedLinks.jsx';
 
 const emptyForm = {
   name: '',
@@ -12,6 +14,14 @@ const emptyForm = {
   total_sent: '',
   html_content: ''
 };
+
+// クライアント側でキャンペーンIDを採番（新規作成時の計測リンク変換に使用。createCampaignはidを受け付ける）
+function generateId(length = 10) {
+  const alphabet = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+  let id = '';
+  for (let i = 0; i < length; i += 1) id += alphabet[Math.floor(Math.random() * alphabet.length)];
+  return id;
+}
 
 export default function ProjectDetail() {
   const { projectId } = useParams();
@@ -26,6 +36,9 @@ export default function ProjectDetail() {
   const [activeTab, setActiveTab] = useState('list');
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const [draftId, setDraftId] = useState(() => generateId());
+  const [showLinkModal, setShowLinkModal] = useState(false);
+  const [convertedLinks, setConvertedLinks] = useState([]);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -119,6 +132,8 @@ export default function ProjectDetail() {
     setEmails([]);
     setActiveTab('list');
     setShowForm(false);
+    setShowLinkModal(false);
+    setConvertedLinks([]);
     loadProject();
   }, [projectId]);
 
@@ -129,14 +144,26 @@ export default function ProjectDetail() {
 
   const comparisonEmails = useMemo(() => emails.slice(0, 3), [emails]);
 
+  function toggleForm() {
+    setShowForm((value) => {
+      const next = !value;
+      if (next) {
+        setDraftId(generateId());
+        setConvertedLinks([]);
+      }
+      return next;
+    });
+  }
+
   async function submit(event) {
     event.preventDefault();
     setSaving(true);
     setError('');
     try {
-      await api.createCampaign({ ...form, project_id: projectId });
+      await api.createCampaign({ ...form, id: draftId, project_id: projectId });
       setForm(emptyForm);
       setShowForm(false);
+      setConvertedLinks([]);
       await loadProject();
       await onChanged();
     } catch (err) {
@@ -202,7 +229,7 @@ export default function ProjectDetail() {
         <section className="panel">
           <div className="panel-heading">
             <h2>メール一覧</h2>
-            <button className="primary" onClick={() => setShowForm((value) => !value)}>
+            <button className="primary" onClick={toggleForm}>
               <MailPlus size={18} />
               <span>メール追加</span>
             </button>
@@ -237,6 +264,13 @@ export default function ProjectDetail() {
                   onChange={(html) => setForm((current) => ({ ...current, html_content: html }))}
                   placeholder="文字を入力して書式設定、または「HTML編集」で既存のHTMLを貼り付け"
                 />
+                <button
+                  type="button"
+                  className="ghost link-convert-trigger"
+                  onClick={() => setShowLinkModal(true)}
+                >
+                  <LinkIcon size={16} /> 本文内のリンクを計測リンクに一括変換
+                </button>
               </div>
               <button className="primary" disabled={saving}>
                 <MailPlus size={18} />
@@ -244,6 +278,8 @@ export default function ProjectDetail() {
               </button>
             </form>
           )}
+
+          {showForm && <ConvertedLinks links={convertedLinks} />}
 
           <div className="table-wrap">
             <table>
@@ -421,6 +457,20 @@ export default function ProjectDetail() {
             </ol>
           </section>
         </>
+      )}
+
+      {showLinkModal && (
+        <LinkTrackModal
+          html={form.html_content}
+          baseUrl={window.location.origin}
+          campaignId={draftId}
+          onClose={() => setShowLinkModal(false)}
+          onApply={(html, links) => {
+            setForm((current) => ({ ...current, html_content: html }));
+            setConvertedLinks(links || []);
+            setShowLinkModal(false);
+          }}
+        />
       )}
     </div>
   );
