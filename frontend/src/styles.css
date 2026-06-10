@@ -397,6 +397,47 @@ textarea:focus {
   gap: 8px;
 }
 
+.detail-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: grid;
+  gap: 12px;
+  background: #f5f7f8;
+  padding: 12px 0;
+  box-shadow: 0 8px 12px -10px rgba(18, 32, 42, 0.25);
+}
+
+.guide-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  color: inherit;
+}
+
+.guide-toggle h2 {
+  margin: 0;
+}
+
+.guide-toggle .chev {
+  color: #12613f;
+  transition: transform 0.18s ease;
+}
+
+.guide-toggle .chev.open {
+  transform: rotate(180deg);
+}
+
+.guide-body {
+  margin-top: 14px;
+}
+
 .form-actions {
   display: flex;
   gap: 8px;

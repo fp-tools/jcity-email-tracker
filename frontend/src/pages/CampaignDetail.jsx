@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useOutletContext, useParams } from 'react-router-dom';
-import { ArrowLeft, Copy, Link as LinkIcon, Pencil, RefreshCcw, Trash2 } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Copy, Link as LinkIcon, Pencil, RefreshCcw, Trash2 } from 'lucide-react';
 import {
   Bar,
   BarChart,
@@ -20,6 +20,14 @@ import LinkTrackModal from '../components/LinkTrackModal.jsx';
 
 function currentOrigin() {
   return window.location.origin;
+}
+
+// SQLiteのcreated_at(UTC, "YYYY-MM-DD HH:MM:SS")を日本時間で表示する
+function formatJst(ts) {
+  if (!ts) return '-';
+  const iso = /[zZ]|[+-]\d\d:?\d\d$/.test(ts) ? ts : `${ts.replace(' ', 'T')}Z`;
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? ts : d.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
 }
 
 const eventLabels = {
@@ -58,6 +66,7 @@ export default function CampaignDetail() {
   const [savingInfo, setSavingInfo] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [showLinkModal, setShowLinkModal] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
 
   function onBack() {
     if (campaign?.project_id) navigate(`/projects/${campaign.project_id}`);
@@ -203,16 +212,62 @@ export default function CampaignDetail() {
 
   return (
     <div className="stack">
-      <div className="detail-actions">
-        <button className="ghost" onClick={onBack}><ArrowLeft size={18} /> 戻る</button>
-        <div className="detail-actions-right">
-          <button className="ghost" onClick={editingInfo ? () => setEditingInfo(false) : startEditInfo} disabled={!campaign}>
-            <Pencil size={16} /> {editingInfo ? '編集を閉じる' : '件名・本文を編集'}
-          </button>
-          <button className="ghost danger" onClick={removeCampaign} disabled={deleting || !campaign}>
-            <Trash2 size={16} /> {deleting ? '削除中...' : '削除'}
-          </button>
+      <div className="detail-sticky">
+        <div className="detail-actions">
+          <button className="ghost" onClick={onBack}><ArrowLeft size={18} /> 戻る</button>
+          <div className="detail-actions-right">
+            <button className="ghost" onClick={editingInfo ? () => setEditingInfo(false) : startEditInfo} disabled={!campaign}>
+              <Pencil size={16} /> {editingInfo ? '編集を閉じる' : '件名・本文を編集'}
+            </button>
+            <button className="ghost danger" onClick={removeCampaign} disabled={deleting || !campaign}>
+              <Trash2 size={16} /> {deleting ? '削除中...' : '削除'}
+            </button>
+          </div>
         </div>
+        {campaign && (
+          <>
+            <div className="tabs">
+              <button className={activeTab === 'stats' ? 'active' : ''} onClick={() => setActiveTab('stats')}>概要</button>
+              <button className={activeTab === 'emails' ? 'active' : ''} onClick={() => setActiveTab('emails')}>メール別詳細</button>
+              <button className={activeTab === 'heatmap' ? 'active' : ''} onClick={() => setActiveTab('heatmap')}>ヒートマップ</button>
+            </div>
+
+            <section className="panel sent-editor">
+              <div className="sent-editor-row">
+                <div className="sent-info">
+                  <span className="sent-label">配信数</span>
+                  {campaign.total_sent > 0 ? (
+                    <strong>{campaign.total_sent.toLocaleString()} 通</strong>
+                  ) : (
+                    <em className="sent-hint">未入力 — 配信後に実際の配信数を入力してください</em>
+                  )}
+                </div>
+                {editingSent ? (
+                  <div className="sent-edit-controls">
+                    <input
+                      type="number"
+                      min="0"
+                      value={sentDraft}
+                      onChange={(event) => setSentDraft(event.target.value)}
+                      placeholder="12000"
+                      autoFocus
+                    />
+                    <button className="primary" onClick={saveTotalSent} disabled={savingSent}>
+                      {savingSent ? '保存中...' : '保存'}
+                    </button>
+                    <button className="ghost" onClick={() => setEditingSent(false)} disabled={savingSent}>
+                      キャンセル
+                    </button>
+                  </div>
+                ) : (
+                  <button className="ghost" onClick={startEditSent}>
+                    {campaign.total_sent > 0 ? '配信数を編集' : '配信数を入力'}
+                  </button>
+                )}
+              </div>
+            </section>
+          </>
+        )}
       </div>
       {error && <div className="alert">{error}</div>}
       {campaign && (
@@ -263,47 +318,6 @@ export default function CampaignDetail() {
               </form>
             </section>
           )}
-          <div className="tabs">
-            <button className={activeTab === 'stats' ? 'active' : ''} onClick={() => setActiveTab('stats')}>概要</button>
-            <button className={activeTab === 'emails' ? 'active' : ''} onClick={() => setActiveTab('emails')}>メール別詳細</button>
-            <button className={activeTab === 'heatmap' ? 'active' : ''} onClick={() => setActiveTab('heatmap')}>ヒートマップ</button>
-          </div>
-
-          <section className="panel sent-editor">
-            <div className="sent-editor-row">
-              <div className="sent-info">
-                <span className="sent-label">配信数</span>
-                {campaign.total_sent > 0 ? (
-                  <strong>{campaign.total_sent.toLocaleString()} 通</strong>
-                ) : (
-                  <em className="sent-hint">未入力 — 配信後に実際の配信数を入力してください</em>
-                )}
-              </div>
-              {editingSent ? (
-                <div className="sent-edit-controls">
-                  <input
-                    type="number"
-                    min="0"
-                    value={sentDraft}
-                    onChange={(event) => setSentDraft(event.target.value)}
-                    placeholder="12000"
-                    autoFocus
-                  />
-                  <button className="primary" onClick={saveTotalSent} disabled={savingSent}>
-                    {savingSent ? '保存中...' : '保存'}
-                  </button>
-                  <button className="ghost" onClick={() => setEditingSent(false)} disabled={savingSent}>
-                    キャンセル
-                  </button>
-                </div>
-              ) : (
-                <button className="ghost" onClick={startEditSent}>
-                  {campaign.total_sent > 0 ? '配信数を編集' : '配信数を入力'}
-                </button>
-              )}
-            </div>
-          </section>
-
           <div className="metrics-grid">
             <section className="metric"><span>ユニーク開封率</span><strong>{campaign.open_rate}%</strong><small>{campaign.unique_opens} / {campaign.total_sent}</small></section>
             <section className="metric"><span>ユニーククリック率</span><strong>{campaign.click_rate}%</strong><small>{campaign.unique_clicks} 件</small></section>
@@ -314,9 +328,17 @@ export default function CampaignDetail() {
           {activeTab === 'stats' && (
             <>
               <section className="panel guide">
-                <div className="panel-heading">
+                <button
+                  type="button"
+                  className="guide-toggle"
+                  onClick={() => setShowGuide((current) => !current)}
+                  aria-expanded={showGuide}
+                >
                   <h2>📋 メールへの埋め込み手順</h2>
-                </div>
+                  <ChevronDown size={20} className={`chev${showGuide ? ' open' : ''}`} />
+                </button>
+                {showGuide && (
+                <div className="guide-body">
                 <p className="guide-intro">
                   下のスニペットを jcity のHTMLメールに貼るだけで、開封・クリック・コンバージョンを自動計測します。
                   <code>{'{{EMAIL_ID}}'}</code> は jcity が配信時に各受信者ごとのIDへ自動で置き換えます（そのまま貼ってください）。
@@ -343,6 +365,8 @@ export default function CampaignDetail() {
                     <span>配信が完了して実数が確定したら、この画面上部の「配信数を入力」から実際の配信数を入れると開封率・クリック率が正しく計算されます。</span>
                   </li>
                 </ol>
+                </div>
+                )}
               </section>
 
               <section className="panel">
@@ -465,7 +489,7 @@ export default function CampaignDetail() {
                     <tbody>
                       {campaign.recent_events?.map((event) => (
                         <tr key={event.id}>
-                          <td>{new Date(event.created_at).toLocaleString('ja-JP')}</td>
+                          <td>{formatJst(event.created_at)}</td>
                           <td>{eventLabels[event.event_type] || event.event_type}</td>
                           <td>{event.email_id}</td>
                           <td>{event.link_id || '-'}</td>
@@ -508,7 +532,7 @@ export default function CampaignDetail() {
                         <td>{row.opened ? 'あり' : '-'}</td>
                         <td>{row.clicked ? 'あり' : '-'}</td>
                         <td>{row.converted ? 'あり' : '-'}</td>
-                        <td>{row.last_event_at ? new Date(row.last_event_at).toLocaleString('ja-JP') : '-'}</td>
+                        <td>{formatJst(row.last_event_at)}</td>
                       </tr>
                     ))}
                     {!emailBreakdown.length && (

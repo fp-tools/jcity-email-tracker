@@ -189,7 +189,7 @@ export default function EmailHeatmap({ campaignId }) {
                         title={`${z.linkId}: ${z.clicks}クリック / ${z.unique_clicks}ユニーク`}
                       >
                         <span className="heatmap-zone-label">
-                          {z.clicks} ({z.unique_clicks})
+                          {z.clicks}件 / {totalClicks > 0 ? ((z.clicks / totalClicks) * 100).toFixed(1) : '0.0'}%
                         </span>
                       </div>
                     ))}

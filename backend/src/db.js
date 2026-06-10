@@ -190,7 +190,7 @@ const recentEventsStmt = db.prepare(`
 
 const timeOfDayStmt = db.prepare(`
   SELECT
-    CAST(strftime('%H', created_at) AS INTEGER) AS hour,
+    CAST(strftime('%H', created_at, '+9 hours') AS INTEGER) AS hour,
     COUNT(CASE WHEN event_type = 'open' THEN 1 END) AS opens,
     COUNT(CASE WHEN event_type = 'click' THEN 1 END) AS clicks,
     COUNT(CASE WHEN event_type = 'conversion' THEN 1 END) AS conversions
