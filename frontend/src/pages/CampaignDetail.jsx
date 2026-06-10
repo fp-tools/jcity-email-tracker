@@ -6,6 +6,8 @@ import {
   BarChart,
   Cell,
   Legend,
+  Line,
+  LineChart,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -70,6 +72,29 @@ export default function CampaignDetail() {
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
   const [convertedLinks, setConvertedLinks] = useState([]);
+  const [trendDays, setTrendDays] = useState('all');
+
+  const trendData = useMemo(() => {
+    const daily = campaign?.daily || [];
+    if (trendDays === 'all') return daily;
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - Number(trendDays));
+    const cutoffStr = cutoff.toISOString().slice(0, 10);
+    return daily.filter((d) => d.day >= cutoffStr);
+  }, [campaign, trendDays]);
+
+  const trendTotals = useMemo(
+    () =>
+      trendData.reduce(
+        (acc, d) => ({
+          opens: acc.opens + d.opens,
+          clicks: acc.clicks + d.clicks,
+          conversions: acc.conversions + d.conversions
+        }),
+        { opens: 0, clicks: 0, conversions: 0 }
+      ),
+    [trendData]
+  );
 
   function onBack() {
     if (campaign?.project_id) navigate(`/projects/${campaign.project_id}`);
@@ -330,6 +355,11 @@ export default function CampaignDetail() {
             <section className="metric"><span>コンバージョン率</span><strong>{campaign.conversion_rate}%</strong><small>{campaign.unique_conversions} 件</small></section>
             <section className="metric"><span>ユニークメール数</span><strong>{campaign.unique_recipients}</strong><small>イベント発生メールID</small></section>
           </div>
+          {campaign.bot_opens > 0 && (
+            <p className="panel-note bot-note">
+              🤖 ボット/スキャナ等による開封 {campaign.bot_opens} 件を除外して集計しています。
+            </p>
+          )}
 
           {activeTab === 'stats' && (
             <>
@@ -426,6 +456,43 @@ export default function CampaignDetail() {
 
               <section className="panel chart-section">
                 <div className="panel-heading">
+                  <h2>日次推移</h2>
+                  <div className="tabs">
+                    {[['all', '全期間'], [7, '7日'], [14, '14日'], [30, '30日']].map(([value, label]) => (
+                      <button
+                        key={value}
+                        className={trendDays === value ? 'active' : ''}
+                        onClick={() => setTrendDays(value)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {trendData.length > 0 ? (
+                  <>
+                    <p className="panel-note">
+                      期間内（延べ）: 開封 {trendTotals.opens} / クリック {trendTotals.clicks} / CV {trendTotals.conversions}
+                    </p>
+                    <ResponsiveContainer width="100%" height={260}>
+                      <LineChart data={trendData}>
+                        <XAxis dataKey="day" tick={{ fontSize: 11 }} />
+                        <YAxis allowDecimals={false} />
+                        <Tooltip formatter={(value, name) => [value, metricLabels[name] || name]} />
+                        <Legend formatter={(value) => metricLabels[value] || value} />
+                        <Line type="monotone" dataKey="opens" stroke="#0d9488" name="opens" dot={false} strokeWidth={2} />
+                        <Line type="monotone" dataKey="clicks" stroke="#6366f1" name="clicks" dot={false} strokeWidth={2} />
+                        <Line type="monotone" dataKey="conversions" stroke="#f59e0b" name="conversions" dot={false} strokeWidth={2} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </>
+                ) : (
+                  <p className="empty">この期間のデータがありません</p>
+                )}
+              </section>
+
+              <section className="panel chart-section">
+                <div className="panel-heading">
                   <h2>時間帯別分析</h2>
                 </div>
                 <ResponsiveContainer width="100%" height={240}>
@@ -496,7 +563,10 @@ export default function CampaignDetail() {
                       {campaign.recent_events?.map((event) => (
                         <tr key={event.id}>
                           <td>{formatJst(event.created_at)}</td>
-                          <td>{eventLabels[event.event_type] || event.event_type}</td>
+                          <td>
+                            {eventLabels[event.event_type] || event.event_type}
+                            {event.is_bot ? <span className="bot-badge">ボット</span> : ''}
+                          </td>
                           <td>{event.email_id}</td>
                           <td>{event.link_id || '-'}</td>
                           <td>{event.device_type || '-'}</td>

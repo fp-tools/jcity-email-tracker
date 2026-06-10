@@ -910,6 +910,21 @@ textarea:focus {
   color: #718089;
 }
 
+.bot-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #fff4e5;
+  color: #9a5b00;
+  border: 1px solid #ffdca8;
+  font-size: 11px;
+}
+
+.bot-note {
+  color: #9a5b00;
+}
+
 .lc-split-hint {
   margin: 0;
   padding-left: 26px;

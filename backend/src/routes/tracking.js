@@ -1,5 +1,5 @@
 import express from 'express';
-import { getCampaign, recordEvent, recordLineClick } from '../db.js';
+import { getCampaign, recordEvent, recordLineClick, isBotUserAgent } from '../db.js';
 import { sendGa4Event } from '../ga4.js';
 
 const router = express.Router();
@@ -81,8 +81,8 @@ router.get('/click/:campaignId/:emailId/:linkId', (req, res) => {
 
   recordAndDispatch(req, 'click', { link_id: req.params.linkId });
 
-  // 遷移先がLINE友だち追加URLなら、CV推定紐付け用にクリックを記録する（方式B）
-  if (LINE_HOST_RE.test(redirectUrl.hostname)) {
+  // 遷移先がLINE友だち追加URLなら、CV推定紐付け用にクリックを記録する（方式B。ボットは除外）
+  if (LINE_HOST_RE.test(redirectUrl.hostname) && !isBotUserAgent(req.get('user-agent') || '')) {
     try {
       const campaign = getCampaign(req.params.campaignId);
       if (campaign?.project_id) {

@@ -68,6 +68,7 @@ addColumnIfNotExists('campaigns', 'send_time', "TEXT DEFAULT ''");
 addColumnIfNotExists('email_events', 'device_type', 'TEXT');
 addColumnIfNotExists('email_events', 'os', 'TEXT');
 addColumnIfNotExists('email_events', 'cv_point', 'TEXT');
+addColumnIfNotExists('email_events', 'is_bot', 'INTEGER DEFAULT 0');
 
 // ファネル（経路）定義
 db.exec(`
@@ -144,19 +145,19 @@ const listProjectsStmt = db.prepare(`
       SELECT COUNT(DISTINCT e.email_id)
       FROM email_events e
       JOIN campaigns c ON c.id = e.campaign_id
-      WHERE c.project_id = p.id AND e.event_type = 'open'
+      WHERE c.project_id = p.id AND e.event_type = 'open' AND e.is_bot = 0
     ) AS unique_opens,
     (
       SELECT COUNT(DISTINCT e.email_id)
       FROM email_events e
       JOIN campaigns c ON c.id = e.campaign_id
-      WHERE c.project_id = p.id AND e.event_type = 'click'
+      WHERE c.project_id = p.id AND e.event_type = 'click' AND e.is_bot = 0
     ) AS unique_clicks,
     (
       SELECT COUNT(DISTINCT e.email_id)
       FROM email_events e
       JOIN campaigns c ON c.id = e.campaign_id
-      WHERE c.project_id = p.id AND e.event_type = 'conversion'
+      WHERE c.project_id = p.id AND e.event_type = 'conversion' AND e.is_bot = 0
     ) AS unique_conversions
   FROM projects p
   ORDER BY p.created_at DESC
@@ -182,7 +183,7 @@ const listCampaignsStmt = db.prepare(`
     COUNT(DISTINCT CASE WHEN e.event_type = 'conversion' THEN e.email_id END) AS unique_conversions,
     COUNT(DISTINCT e.email_id) AS unique_recipients
   FROM campaigns c
-  LEFT JOIN email_events e ON e.campaign_id = c.id
+  LEFT JOIN email_events e ON e.campaign_id = c.id AND e.is_bot = 0
   GROUP BY c.id
   ORDER BY c.created_at DESC
 `);
@@ -198,7 +199,7 @@ const listEmailsByProjectStmt = db.prepare(`
     COUNT(DISTINCT CASE WHEN e.event_type = 'conversion' THEN e.email_id END) AS unique_conversions,
     COUNT(DISTINCT e.email_id) AS unique_recipients
   FROM campaigns c
-  LEFT JOIN email_events e ON e.campaign_id = c.id
+  LEFT JOIN email_events e ON e.campaign_id = c.id AND e.is_bot = 0
   WHERE c.project_id = ?
   GROUP BY c.id
   ORDER BY c.created_at DESC
@@ -215,8 +216,8 @@ const updateCampaignStmt = db.prepare(`
 const deleteCampaignStmt = db.prepare('DELETE FROM campaigns WHERE id = ?');
 
 const insertEventStmt = db.prepare(`
-  INSERT INTO email_events (campaign_id, email_id, event_type, link_id, ip_address, user_agent, device_type, os, cv_point)
-  VALUES (@campaign_id, @email_id, @event_type, @link_id, @ip_address, @user_agent, @device_type, @os, @cv_point)
+  INSERT INTO email_events (campaign_id, email_id, event_type, link_id, ip_address, user_agent, device_type, os, cv_point, is_bot)
+  VALUES (@campaign_id, @email_id, @event_type, @link_id, @ip_address, @user_agent, @device_type, @os, @cv_point, @is_bot)
 `);
 
 const statsStmt = db.prepare(`
@@ -230,17 +231,39 @@ const statsStmt = db.prepare(`
     COUNT(DISTINCT CASE WHEN e.event_type = 'conversion' THEN e.email_id END) AS unique_conversions,
     COUNT(DISTINCT e.email_id) AS unique_recipients
   FROM campaigns c
-  LEFT JOIN email_events e ON e.campaign_id = c.id
+  LEFT JOIN email_events e ON e.campaign_id = c.id AND e.is_bot = 0
   WHERE c.id = ?
   GROUP BY c.id
 `);
 
 const recentEventsStmt = db.prepare(`
-  SELECT id, campaign_id, email_id, event_type, link_id, ip_address, user_agent, device_type, os, created_at
+  SELECT id, campaign_id, email_id, event_type, link_id, ip_address, user_agent, device_type, os, is_bot, created_at
   FROM email_events
   WHERE campaign_id = ?
   ORDER BY created_at DESC, id DESC
   LIMIT ?
+`);
+
+// 配信後のボット開封数（除外した件数を表示するため）
+const botOpensStmt = db.prepare(`
+  SELECT COUNT(*) AS bot_opens
+  FROM email_events
+  WHERE campaign_id = ? AND event_type = 'open' AND is_bot = 1
+`);
+
+// 日次推移（JST日付ごとの開封/クリック/CV。ボット除外）
+const dailyTrendStmt = db.prepare(`
+  SELECT
+    date(created_at, '+9 hours') AS day,
+    COUNT(CASE WHEN event_type = 'open' THEN 1 END) AS opens,
+    COUNT(DISTINCT CASE WHEN event_type = 'open' THEN email_id END) AS unique_opens,
+    COUNT(CASE WHEN event_type = 'click' THEN 1 END) AS clicks,
+    COUNT(DISTINCT CASE WHEN event_type = 'click' THEN email_id END) AS unique_clicks,
+    COUNT(CASE WHEN event_type = 'conversion' THEN 1 END) AS conversions
+  FROM email_events
+  WHERE campaign_id = ? AND is_bot = 0
+  GROUP BY day
+  ORDER BY day
 `);
 
 const timeOfDayStmt = db.prepare(`
@@ -250,7 +273,7 @@ const timeOfDayStmt = db.prepare(`
     COUNT(CASE WHEN event_type = 'click' THEN 1 END) AS clicks,
     COUNT(CASE WHEN event_type = 'conversion' THEN 1 END) AS conversions
   FROM email_events
-  WHERE campaign_id = ?
+  WHERE campaign_id = ? AND is_bot = 0
   GROUP BY hour
   ORDER BY hour
 `);
@@ -258,14 +281,14 @@ const timeOfDayStmt = db.prepare(`
 const devicesStmt = db.prepare(`
   SELECT COALESCE(device_type, 'unknown') AS device_type, COUNT(*) AS count
   FROM email_events
-  WHERE campaign_id = ? AND event_type = 'open'
+  WHERE campaign_id = ? AND event_type = 'open' AND is_bot = 0
   GROUP BY COALESCE(device_type, 'unknown')
 `);
 
 const osBreakdownStmt = db.prepare(`
   SELECT COALESCE(os, 'unknown') AS os, COUNT(*) AS count
   FROM email_events
-  WHERE campaign_id = ? AND event_type = 'open'
+  WHERE campaign_id = ? AND event_type = 'open' AND is_bot = 0
   GROUP BY COALESCE(os, 'unknown')
 `);
 
@@ -275,7 +298,7 @@ const clicksByLinkStmt = db.prepare(`
     COUNT(*) AS clicks,
     COUNT(DISTINCT email_id) AS unique_clicks
   FROM email_events
-  WHERE campaign_id = ? AND event_type = 'click' AND link_id IS NOT NULL AND link_id <> ''
+  WHERE campaign_id = ? AND event_type = 'click' AND is_bot = 0 AND link_id IS NOT NULL AND link_id <> ''
   GROUP BY link_id
   ORDER BY clicks DESC
 `);
@@ -286,7 +309,7 @@ const conversionsByLinkStmt = db.prepare(`
     COUNT(*) AS conversions,
     COUNT(DISTINCT email_id) AS unique_conversions
   FROM email_events
-  WHERE campaign_id = ? AND event_type = 'conversion' AND link_id IS NOT NULL AND link_id <> ''
+  WHERE campaign_id = ? AND event_type = 'conversion' AND is_bot = 0 AND link_id IS NOT NULL AND link_id <> ''
   GROUP BY link_id
   ORDER BY conversions DESC
 `);
@@ -299,7 +322,7 @@ const emailBreakdownStmt = db.prepare(`
     MAX(CASE WHEN event_type = 'conversion' THEN 1 ELSE 0 END) AS converted,
     MAX(created_at) AS last_event_at
   FROM email_events
-  WHERE campaign_id = ?
+  WHERE campaign_id = ? AND is_bot = 0
   GROUP BY email_id
   ORDER BY last_event_at DESC
 `);
@@ -393,6 +416,15 @@ function withProjectRates(row) {
     click_rate: rate(row.unique_clicks),
     conversion_rate: rate(row.unique_conversions)
   };
+}
+
+// メール開封を水増しする既知のボット/スキャナ/プリフェッチを判定（誤検知を避けるため保守的に）
+// 注: Gmailの GoogleImageProxy は実開封なので除外しない
+const BOT_UA_RE = /(bot\b|crawler|spider|crawl|preview|scanner|monitor|curl|wget|python-requests|go-http-client|java\/|apache-httpclient|okhttp|libwww|lwp::|headless|phantomjs|slackbot|facebookexternalhit|whatsapp|telegrambot|bingpreview|applebot|barracuda|proofpoint|mimecast|symantec|forcepoint|messagelabs|safelinks|microsoftpreview|cloudflare|ahrefs|semrush|mj12bot|dotbot|gptbot|petalbot)/i;
+
+export function isBotUserAgent(ua = '') {
+  if (!ua) return false;
+  return BOT_UA_RE.test(ua);
 }
 
 export function parseUserAgent(ua = '') {
@@ -520,6 +552,8 @@ export function getCampaign(id) {
 
 export function recordEvent(event) {
   const parsed = parseUserAgent(event.user_agent || '');
+  // CV(conversion)はボット判定しない（LINE webhook/サーバー間通信のため）
+  const isBot = event.event_type === 'conversion' ? 0 : isBotUserAgent(event.user_agent || '') ? 1 : 0;
   insertEventStmt.run({
     campaign_id: event.campaign_id,
     email_id: event.email_id,
@@ -529,7 +563,8 @@ export function recordEvent(event) {
     user_agent: event.user_agent || null,
     device_type: parsed.device_type,
     os: parsed.os,
-    cv_point: event.cv_point || null
+    cv_point: event.cv_point || null,
+    is_bot: isBot
   });
 }
 
@@ -547,7 +582,16 @@ export function getCampaignStats(id, limit = 100) {
     })),
     devices: devicesStmt.all(id).map((row) => ({ ...row, count: Number(row.count || 0) })),
     os_breakdown: osBreakdownStmt.all(id).map((row) => ({ ...row, count: Number(row.count || 0) })),
-    recent_events: recentEventsStmt.all(id, Math.min(Math.max(Number(limit) || 100, 1), 500))
+    recent_events: recentEventsStmt.all(id, Math.min(Math.max(Number(limit) || 100, 1), 500)),
+    bot_opens: Number(botOpensStmt.get(id)?.bot_opens || 0),
+    daily: dailyTrendStmt.all(id).map((row) => ({
+      day: row.day,
+      opens: Number(row.opens || 0),
+      unique_opens: Number(row.unique_opens || 0),
+      clicks: Number(row.clicks || 0),
+      unique_clicks: Number(row.unique_clicks || 0),
+      conversions: Number(row.conversions || 0)
+    }))
   };
 }
 
@@ -825,7 +869,7 @@ export function getFunnelResults(funnel) {
     const row = db
       .prepare(
         `SELECT COUNT(*) AS total, COUNT(DISTINCT email_id) AS uniq
-         FROM email_events WHERE ${scopeCond} AND ${cond}`
+         FROM email_events WHERE ${scopeCond} AND is_bot = 0 AND ${cond}`
       )
       .get(...params);
     return {
