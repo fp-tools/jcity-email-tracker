@@ -68,6 +68,44 @@ addColumnIfNotExists('campaigns', 'send_time', "TEXT DEFAULT ''");
 addColumnIfNotExists('email_events', 'device_type', 'TEXT');
 addColumnIfNotExists('email_events', 'os', 'TEXT');
 
+// LINE Messaging API 連携（プロジェクト単位の設定 + クリック推定紐付け）
+db.exec(`
+  CREATE TABLE IF NOT EXISTS line_config (
+    project_id TEXT PRIMARY KEY,
+    channel_secret TEXT DEFAULT '',
+    channel_access_token TEXT DEFAULT '',
+    add_friend_url TEXT DEFAULT '',
+    attribution_window_min INTEGER DEFAULT 60,
+    count_unfollow INTEGER DEFAULT 0,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS line_clicks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id TEXT NOT NULL,
+    campaign_id TEXT NOT NULL,
+    email_id TEXT NOT NULL,
+    link_id TEXT,
+    ip_address TEXT,
+    consumed INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS line_follows (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id TEXT NOT NULL,
+    line_user_id TEXT,
+    event_type TEXT,
+    attributed_campaign_id TEXT,
+    attributed_email_id TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_line_clicks_pending
+    ON line_clicks (project_id, consumed, created_at);
+`);
+
 const insertProject = db.prepare(`
   INSERT INTO projects (id, name, description)
   VALUES (@id, @name, @description)
@@ -248,6 +286,51 @@ const saveGa4Stmt = db.prepare(`
 `);
 
 const getGa4Stmt = db.prepare('SELECT id, measurement_id, api_secret, updated_at FROM ga4_config WHERE id = 1');
+
+const getLineConfigStmt = db.prepare('SELECT * FROM line_config WHERE project_id = ?');
+
+const saveLineConfigStmt = db.prepare(`
+  INSERT INTO line_config (project_id, channel_secret, channel_access_token, add_friend_url, attribution_window_min, count_unfollow, updated_at)
+  VALUES (@project_id, @channel_secret, @channel_access_token, @add_friend_url, @attribution_window_min, @count_unfollow, CURRENT_TIMESTAMP)
+  ON CONFLICT(project_id) DO UPDATE SET
+    channel_secret = excluded.channel_secret,
+    channel_access_token = excluded.channel_access_token,
+    add_friend_url = excluded.add_friend_url,
+    attribution_window_min = excluded.attribution_window_min,
+    count_unfollow = excluded.count_unfollow,
+    updated_at = CURRENT_TIMESTAMP
+`);
+
+const insertLineClickStmt = db.prepare(`
+  INSERT INTO line_clicks (project_id, campaign_id, email_id, link_id, ip_address)
+  VALUES (@project_id, @campaign_id, @email_id, @link_id, @ip_address)
+`);
+
+// 直近の未消費LINEクリック（時間窓内）を新しい順に取得
+const recentLineClickStmt = db.prepare(`
+  SELECT * FROM line_clicks
+  WHERE project_id = ? AND consumed = 0
+    AND created_at >= datetime('now', ?)
+  ORDER BY created_at DESC, id DESC
+  LIMIT 1
+`);
+
+const consumeLineClickStmt = db.prepare('UPDATE line_clicks SET consumed = 1 WHERE id = ?');
+
+const insertLineFollowStmt = db.prepare(`
+  INSERT INTO line_follows (project_id, line_user_id, event_type, attributed_campaign_id, attributed_email_id)
+  VALUES (@project_id, @line_user_id, @event_type, @attributed_campaign_id, @attributed_email_id)
+`);
+
+const lineStatsStmt = db.prepare(`
+  SELECT
+    COUNT(CASE WHEN event_type = 'follow' THEN 1 END) AS follows,
+    COUNT(CASE WHEN event_type = 'follow' AND attributed_email_id IS NOT NULL THEN 1 END) AS attributed_follows,
+    COUNT(CASE WHEN event_type = 'unfollow' THEN 1 END) AS unfollows,
+    MAX(created_at) AS last_event_at
+  FROM line_follows
+  WHERE project_id = ?
+`);
 
 function withRates(row) {
   const sent = Number(row.total_sent || 0);
@@ -486,4 +569,120 @@ export function getGa4SecretConfig() {
     return { measurement_id: envMeasurementId, api_secret: envApiSecret };
   }
   return getGa4Config({ includeSecret: true });
+}
+
+const mask = (value) => (value ? '********' : '');
+
+export function getLineConfig(projectId, { includeSecret = false } = {}) {
+  const row = getLineConfigStmt.get(projectId);
+  const base = row || {
+    project_id: projectId,
+    channel_secret: '',
+    channel_access_token: '',
+    add_friend_url: '',
+    attribution_window_min: 60,
+    count_unfollow: 0,
+    updated_at: null
+  };
+  const configured = Boolean(base.channel_secret);
+  const result = {
+    ...base,
+    count_unfollow: Boolean(base.count_unfollow),
+    configured
+  };
+  if (!includeSecret) {
+    result.channel_secret = mask(base.channel_secret);
+    result.channel_access_token = mask(base.channel_access_token);
+    result.has_channel_secret = Boolean(base.channel_secret);
+    result.has_channel_access_token = Boolean(base.channel_access_token);
+  }
+  return result;
+}
+
+export function saveLineConfig(projectId, input = {}) {
+  if (!getProjectStmt.get(projectId)) {
+    const error = new Error('Project not found');
+    error.status = 404;
+    throw error;
+  }
+  const existing = getLineConfigStmt.get(projectId);
+  // 空欄・マスク値('********')がそのまま送られてきた場合は既存の秘密値を維持する
+  const keepIfMasked = (incoming, current) =>
+    incoming === undefined || incoming === '' || incoming === '********'
+      ? current || ''
+      : String(incoming).trim();
+
+  saveLineConfigStmt.run({
+    project_id: projectId,
+    channel_secret: keepIfMasked(input.channel_secret, existing?.channel_secret),
+    channel_access_token: keepIfMasked(input.channel_access_token, existing?.channel_access_token),
+    add_friend_url:
+      input.add_friend_url !== undefined ? String(input.add_friend_url).trim() : existing?.add_friend_url || '',
+    attribution_window_min:
+      input.attribution_window_min !== undefined
+        ? Math.min(Math.max(Number.parseInt(input.attribution_window_min, 10) || 60, 1), 1440)
+        : existing?.attribution_window_min || 60,
+    count_unfollow:
+      input.count_unfollow !== undefined ? (input.count_unfollow ? 1 : 0) : existing?.count_unfollow || 0
+  });
+  return getLineConfig(projectId);
+}
+
+export function getLineSecretConfig(projectId) {
+  return getLineConfigStmt.get(projectId) || null;
+}
+
+export function recordLineClick({ project_id, campaign_id, email_id, link_id, ip_address }) {
+  if (!project_id || !campaign_id || !email_id) return;
+  insertLineClickStmt.run({
+    project_id,
+    campaign_id,
+    email_id,
+    link_id: link_id || null,
+    ip_address: ip_address || null
+  });
+}
+
+export function getLineStats(projectId) {
+  const row = lineStatsStmt.get(projectId) || {};
+  return {
+    follows: Number(row.follows || 0),
+    attributed_follows: Number(row.attributed_follows || 0),
+    unfollows: Number(row.unfollows || 0),
+    last_event_at: row.last_event_at || null
+  };
+}
+
+// LINE follow/unfollow を受けてCVを推定紐付け（方式B）
+// follow: 直近の未消費クリックを探し、見つかればそのメールにconversionを記録
+export function recordLineEvent(projectId, { line_user_id, event_type }) {
+  const config = getLineConfigStmt.get(projectId);
+  const windowMin = Math.min(Math.max(Number(config?.attribution_window_min) || 60, 1), 1440);
+
+  let attributed = null;
+  if (event_type === 'follow') {
+    const candidate = recentLineClickStmt.get(projectId, `-${windowMin} minutes`);
+    if (candidate) {
+      consumeLineClickStmt.run(candidate.id);
+      recordEvent({
+        campaign_id: candidate.campaign_id,
+        email_id: candidate.email_id,
+        event_type: 'conversion',
+        link_id: candidate.link_id,
+        ip_address: candidate.ip_address,
+        user_agent: 'line-webhook'
+      });
+      attributed = { campaign_id: candidate.campaign_id, email_id: candidate.email_id };
+    }
+  }
+
+  insertLineFollowStmt.run({
+    project_id: projectId,
+    line_user_id: line_user_id || null,
+    event_type: event_type || null,
+    attributed_campaign_id: attributed?.campaign_id || null,
+    attributed_email_id: attributed?.email_id || null
+  });
+
+  return { attributed };
 }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useOutletContext, useParams } from 'react-router-dom';
-import { ArrowLeft, MailPlus, RefreshCcw, Trash2 } from 'lucide-react';
+import { ArrowLeft, Check, Copy, MailPlus, MessageCircle, RefreshCcw, Trash2 } from 'lucide-react';
 import { api } from '../api.js';
 import HtmlEditor from '../components/HtmlEditor.jsx';
 
@@ -29,6 +29,75 @@ export default function ProjectDetail() {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [lineConfig, setLineConfig] = useState(null);
+  const [lineStats, setLineStats] = useState(null);
+  const [lineForm, setLineForm] = useState({
+    channel_secret: '',
+    channel_access_token: '',
+    add_friend_url: '',
+    attribution_window_min: 60,
+    count_unfollow: false
+  });
+  const [lineLoading, setLineLoading] = useState(false);
+  const [lineSaving, setLineSaving] = useState(false);
+  const [lineCopied, setLineCopied] = useState('');
+
+  const webhookUrl = `${window.location.origin}/webhook/line/${projectId}`;
+
+  async function loadLineConfig() {
+    if (!projectId) return;
+    setLineLoading(true);
+    setError('');
+    try {
+      const data = await api.projects.lineConfig(projectId);
+      setLineConfig(data.config);
+      setLineStats(data.stats);
+      setLineForm({
+        channel_secret: '',
+        channel_access_token: '',
+        add_friend_url: data.config.add_friend_url || '',
+        attribution_window_min: data.config.attribution_window_min || 60,
+        count_unfollow: Boolean(data.config.count_unfollow)
+      });
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLineLoading(false);
+    }
+  }
+
+  async function saveLineConfig(event) {
+    event.preventDefault();
+    setLineSaving(true);
+    setError('');
+    try {
+      const payload = {
+        add_friend_url: lineForm.add_friend_url,
+        attribution_window_min: lineForm.attribution_window_min,
+        count_unfollow: lineForm.count_unfollow
+      };
+      // 秘密値は入力された時だけ送る（空欄は既存維持）
+      if (lineForm.channel_secret) payload.channel_secret = lineForm.channel_secret;
+      if (lineForm.channel_access_token) payload.channel_access_token = lineForm.channel_access_token;
+      const data = await api.projects.saveLineConfig(projectId, payload);
+      setLineConfig(data.config);
+      setLineStats(data.stats);
+      setLineForm((current) => ({ ...current, channel_secret: '', channel_access_token: '' }));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLineSaving(false);
+    }
+  }
+
+  async function copyLine(text, key) {
+    await navigator.clipboard.writeText(text);
+    setLineCopied(key);
+    window.setTimeout(() => setLineCopied(''), 1400);
+  }
+
+  const updateLine = (key) => (event) =>
+    setLineForm((current) => ({ ...current, [key]: event.target.value }));
 
   async function loadProject() {
     if (!projectId) return;
@@ -52,6 +121,11 @@ export default function ProjectDetail() {
     setShowForm(false);
     loadProject();
   }, [projectId]);
+
+  useEffect(() => {
+    if (activeTab === 'line') loadLineConfig();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, projectId]);
 
   const comparisonEmails = useMemo(() => emails.slice(0, 3), [emails]);
 
@@ -119,6 +193,9 @@ export default function ProjectDetail() {
       <div className="tabs">
         <button className={activeTab === 'list' ? 'active' : ''} onClick={() => setActiveTab('list')}>メール一覧</button>
         <button className={activeTab === 'comparison' ? 'active' : ''} onClick={() => setActiveTab('comparison')}>メール比較</button>
+        <button className={activeTab === 'line' ? 'active' : ''} onClick={() => setActiveTab('line')}>
+          <MessageCircle size={15} /> LINE連携
+        </button>
       </div>
 
       {activeTab === 'list' && (
@@ -231,6 +308,119 @@ export default function ProjectDetail() {
             {!comparisonEmails.length && <p className="empty">比較できるメールがありません</p>}
           </div>
         </section>
+      )}
+
+      {activeTab === 'line' && (
+        <>
+          <section className="panel">
+            <div className="panel-heading">
+              <div>
+                <h2>LINE連携（友だち追加をCV計測）</h2>
+                <p className="panel-note">
+                  メールのLINE誘導リンクを計測リンクに変換し、友だち追加（follow）をクリックから推定してCVに計上します。
+                </p>
+              </div>
+              {lineConfig?.configured && <span className="status-pill on">設定済み</span>}
+            </div>
+
+            {lineStats && (
+              <div className="metrics-grid compact">
+                <section className="metric"><span>友だち追加(CV)</span><strong>{lineStats.follows}</strong><small>うち紐付け {lineStats.attributed_follows}</small></section>
+                <section className="metric"><span>紐付け済み</span><strong>{lineStats.attributed_follows}</strong><small>メールに割当</small></section>
+                <section className="metric"><span>ブロック解除</span><strong>{lineStats.unfollows}</strong><small>記録時のみ</small></section>
+              </div>
+            )}
+
+            <div className="snippet">
+              <div>
+                <strong>Webhook URL（LINE Developersに登録）</strong>
+                <button className="icon-button" onClick={() => copyLine(webhookUrl, 'webhook')} title="コピー">
+                  {lineCopied === 'webhook' ? <Check size={17} /> : <Copy size={17} />}
+                </button>
+              </div>
+              <pre>{webhookUrl}</pre>
+              {lineCopied === 'webhook' && <small>コピーしました</small>}
+            </div>
+
+            <form className="form email-form" onSubmit={saveLineConfig}>
+              <label className="full">
+                <span>Channel Secret {lineConfig?.has_channel_secret && <em className="field-hint">（設定済み・変更時のみ入力）</em>}</span>
+                <input
+                  type="password"
+                  value={lineForm.channel_secret}
+                  onChange={updateLine('channel_secret')}
+                  placeholder={lineConfig?.has_channel_secret ? '********（変更する場合のみ入力）' : 'LINEのChannel Secret'}
+                  autoComplete="off"
+                />
+              </label>
+              <label className="full">
+                <span>友だち追加URL</span>
+                <input
+                  value={lineForm.add_friend_url}
+                  onChange={updateLine('add_friend_url')}
+                  placeholder="https://lin.ee/xxxxxxx"
+                />
+              </label>
+              <label>
+                <span>Channel Access Token <em className="field-hint">（任意）</em></span>
+                <input
+                  type="password"
+                  value={lineForm.channel_access_token}
+                  onChange={updateLine('channel_access_token')}
+                  placeholder={lineConfig?.has_channel_access_token ? '********' : '自動返信を使う場合のみ'}
+                  autoComplete="off"
+                />
+              </label>
+              <label>
+                <span>紐付け時間窓（分）</span>
+                <input
+                  type="number"
+                  min="1"
+                  max="1440"
+                  value={lineForm.attribution_window_min}
+                  onChange={updateLine('attribution_window_min')}
+                />
+              </label>
+              <label className="full lc-split">
+                <input
+                  type="checkbox"
+                  checked={lineForm.count_unfollow}
+                  onChange={(event) => setLineForm((current) => ({ ...current, count_unfollow: event.target.checked }))}
+                />
+                ブロック解除(unfollow)も記録する
+              </label>
+              <button className="primary" disabled={lineSaving || lineLoading}>
+                {lineSaving ? '保存中...' : 'LINE設定を保存'}
+              </button>
+            </form>
+          </section>
+
+          <section className="panel guide">
+            <div className="panel-heading"><h2>📋 設定手順</h2></div>
+            <ol className="guide-steps">
+              <li>
+                <strong>① LINE Developersでチャネルを用意</strong>
+                <span>Messaging APIチャネルを作成（既存の公式アカウントでも可）。</span>
+              </li>
+              <li>
+                <strong>② Channel Secret を上のフォームに登録</strong>
+                <span>チャネル基本設定の Channel Secret をコピーして保存します（Webhook署名検証に使用）。</span>
+              </li>
+              <li>
+                <strong>③ Webhook URL を登録</strong>
+                <span>上の Webhook URL を LINE の Messaging API設定に貼り、「Webhookの利用」をオン・「検証」で疎通確認します。</span>
+              </li>
+              <li>
+                <strong>④ 友だち追加URLを登録</strong>
+                <span>LINEの友だち追加URL（lin.ee等）を上のフォームに登録します。</span>
+              </li>
+              <li>
+                <strong>⑤ メールのLINEリンクを計測リンクに変換</strong>
+                <span>各メールで、LINE誘導リンクの遷移先を友だち追加URLにして計測リンクに変換します。クリック後に友だち追加されると、そのメールのCVとして紐付きます。</span>
+              </li>
+            </ol>
+          </section>
+        </>
       )}
     </div>
   );

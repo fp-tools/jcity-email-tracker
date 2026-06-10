@@ -34,7 +34,9 @@ export const api = {
     create: (data) => post('/api/projects', data),
     get: (id) => get(`/api/projects/${encodeURIComponent(id)}`),
     stats: (id) => get(`/api/projects/${encodeURIComponent(id)}/stats`),
-    delete: (id) => del(`/api/projects/${encodeURIComponent(id)}`)
+    delete: (id) => del(`/api/projects/${encodeURIComponent(id)}`),
+    lineConfig: (id) => get(`/api/projects/${encodeURIComponent(id)}/line-config`),
+    saveLineConfig: (id, payload) => post(`/api/projects/${encodeURIComponent(id)}/line-config`, payload)
   },
   listCampaigns: () => get('/api/campaigns'),
   createCampaign: (payload) => post('/api/campaigns', payload),

@@ -741,6 +741,19 @@ textarea:focus {
   gap: 8px;
 }
 
+.lc-split-choice {
+  display: grid;
+  gap: 4px;
+}
+
+.lc-split-hint {
+  margin: 0;
+  padding-left: 26px;
+  font-size: 12px;
+  color: #718089;
+  line-height: 1.5;
+}
+
 th.sortable {
   cursor: pointer;
   user-select: none;

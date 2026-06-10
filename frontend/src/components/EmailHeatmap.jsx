@@ -119,7 +119,18 @@ export default function EmailHeatmap({ campaignId }) {
   if (error) return <section className="panel"><div className="alert">{error}</div></section>;
 
   const hasHtml = Boolean(data?.html_content);
-  const totalClicks = zones.reduce((sum, z) => sum + z.clicks, 0);
+  // 同一linkIdが複数箇所にあっても、合計は linkId ごとに1回だけ数える（二重カウント防止）
+  const totalClicks = useMemo(() => {
+    const byLink = new Map();
+    for (const z of zones) if (!byLink.has(z.linkId)) byLink.set(z.linkId, z.clicks);
+    return Array.from(byLink.values()).reduce((sum, c) => sum + c, 0);
+  }, [zones]);
+  // 一覧表は linkId 単位で重複排除する
+  const uniqueZones = useMemo(() => {
+    const map = new Map();
+    for (const z of zones) if (!map.has(z.linkId)) map.set(z.linkId, z);
+    return Array.from(map.values());
+  }, [zones]);
 
   return (
     <div className="stack">
@@ -159,7 +170,7 @@ export default function EmailHeatmap({ campaignId }) {
           <>
             <p className="panel-note">
               {mode === 'click'
-                ? `トラッキングリンク ${zones.length} 件 / 合計クリック ${totalClicks} 件。色が濃いほどクリックが集中しています。`
+                ? `トラッキングリンク ${uniqueZones.length} 件 / 合計クリック ${totalClicks} 件。色が濃いほどクリックが集中しています。`
                 : '上が濃いほど多くの人が到達（読んだ）と推定される領域です。'}
             </p>
             <div className="heatmap-stage">
@@ -216,7 +227,7 @@ export default function EmailHeatmap({ campaignId }) {
                     <tr><th>リンクID</th><th>テキスト</th><th>クリック</th><th>ユニーク</th></tr>
                   </thead>
                   <tbody>
-                    {[...zones].sort((a, b) => b.clicks - a.clicks).map((z, i) => (
+                    {[...uniqueZones].sort((a, b) => b.clicks - a.clicks).map((z, i) => (
                       <tr key={`${z.linkId}-row-${i}`}>
                         <td>{z.linkId}</td>
                         <td>{z.text || '-'}</td>
