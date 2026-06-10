@@ -263,6 +263,17 @@ const clicksByLinkStmt = db.prepare(`
   ORDER BY clicks DESC
 `);
 
+const conversionsByLinkStmt = db.prepare(`
+  SELECT
+    link_id,
+    COUNT(*) AS conversions,
+    COUNT(DISTINCT email_id) AS unique_conversions
+  FROM email_events
+  WHERE campaign_id = ? AND event_type = 'conversion' AND link_id IS NOT NULL AND link_id <> ''
+  GROUP BY link_id
+  ORDER BY conversions DESC
+`);
+
 const emailBreakdownStmt = db.prepare(`
   SELECT
     email_id,
@@ -531,6 +542,14 @@ export function getClicksByLink(campaignId) {
     link_id: row.link_id,
     clicks: Number(row.clicks || 0),
     unique_clicks: Number(row.unique_clicks || 0)
+  }));
+}
+
+export function getConversionsByLink(campaignId) {
+  return conversionsByLinkStmt.all(campaignId).map((row) => ({
+    link_id: row.link_id,
+    conversions: Number(row.conversions || 0),
+    unique_conversions: Number(row.unique_conversions || 0)
   }));
 }
 

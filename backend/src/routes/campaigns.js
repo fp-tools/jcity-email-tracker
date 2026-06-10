@@ -1,5 +1,5 @@
 import express from 'express';
-import { createCampaign, deleteCampaign, getCampaign, getCampaignStats, getClicksByLink, getEmailBreakdown, listCampaigns, updateCampaign } from '../db.js';
+import { createCampaign, deleteCampaign, getCampaign, getCampaignStats, getClicksByLink, getConversionsByLink, getEmailBreakdown, listCampaigns, updateCampaign } from '../db.js';
 
 const router = express.Router();
 
@@ -49,7 +49,8 @@ router.get('/campaigns/:id/heatmap', (req, res) => {
   if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
   return res.json({
     html_content: campaign.html_content || '',
-    clicks_by_link: getClicksByLink(req.params.id)
+    clicks_by_link: getClicksByLink(req.params.id),
+    conversions_by_link: getConversionsByLink(req.params.id)
   });
 });
 

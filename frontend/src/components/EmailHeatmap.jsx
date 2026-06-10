@@ -62,18 +62,22 @@ export default function EmailHeatmap({ campaignId }) {
         1
       );
       const clickMap = new Map((data.clicks_by_link || []).map((c) => [c.link_id, c]));
+      const convMap = new Map((data.conversions_by_link || []).map((c) => [c.link_id, c]));
       const anchors = Array.from(doc.querySelectorAll('a[href*="/click/"]'));
       const found = [];
       for (const a of anchors) {
         const linkId = linkIdFromHref(a.getAttribute('href') || '');
         if (!linkId) continue;
         const stats = clickMap.get(linkId) || { clicks: 0, unique_clicks: 0 };
+        const conv = convMap.get(linkId) || { conversions: 0, unique_conversions: 0 };
         found.push({
           linkId,
           top: absoluteTop(a),
           height: a.offsetHeight || 20,
           clicks: stats.clicks,
           unique_clicks: stats.unique_clicks,
+          conversions: conv.conversions,
+          unique_conversions: conv.unique_conversions,
           text: (a.textContent || '').trim().slice(0, 40)
         });
       }
@@ -125,6 +129,11 @@ export default function EmailHeatmap({ campaignId }) {
     for (const z of zones) if (!byLink.has(z.linkId)) byLink.set(z.linkId, z.clicks);
     return Array.from(byLink.values()).reduce((sum, c) => sum + c, 0);
   }, [zones]);
+  const totalConversions = useMemo(() => {
+    const byLink = new Map();
+    for (const z of zones) if (!byLink.has(z.linkId)) byLink.set(z.linkId, z.conversions || 0);
+    return Array.from(byLink.values()).reduce((sum, c) => sum + c, 0);
+  }, [zones]);
   // 一覧表は linkId 単位で重複排除する
   const uniqueZones = useMemo(() => {
     const map = new Map();
@@ -170,7 +179,7 @@ export default function EmailHeatmap({ campaignId }) {
           <>
             <p className="panel-note">
               {mode === 'click'
-                ? `トラッキングリンク ${uniqueZones.length} 件 / 合計クリック ${totalClicks} 件。色が濃いほどクリックが集中しています。`
+                ? `トラッキングリンク ${uniqueZones.length} 件 / 合計クリック ${totalClicks} 件 / 合計CV ${totalConversions} 件。色が濃いほどクリックが集中しています。`
                 : '上が濃いほど多くの人が到達（読んだ）と推定される領域です。'}
             </p>
             <div className="heatmap-stage">
@@ -224,7 +233,7 @@ export default function EmailHeatmap({ campaignId }) {
               <div className="table-wrap">
                 <table>
                   <thead>
-                    <tr><th>リンクID</th><th>テキスト</th><th>クリック</th><th>ユニーク</th></tr>
+                    <tr><th>リンクID</th><th>テキスト</th><th>クリック</th><th>ユニーク</th><th>CV</th><th>CVユニーク</th></tr>
                   </thead>
                   <tbody>
                     {[...uniqueZones].sort((a, b) => b.clicks - a.clicks).map((z, i) => (
@@ -233,6 +242,8 @@ export default function EmailHeatmap({ campaignId }) {
                         <td>{z.text || '-'}</td>
                         <td>{z.clicks}</td>
                         <td>{z.unique_clicks}</td>
+                        <td>{z.conversions || 0}</td>
+                        <td>{z.unique_conversions || 0}</td>
                       </tr>
                     ))}
                   </tbody>
