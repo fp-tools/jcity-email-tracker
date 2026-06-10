@@ -38,6 +38,43 @@ export default function FunnelManager({ scope, ownerId }) {
   const [draft, setDraft] = useState({ name: '', steps: [] });
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState('');
+  const [lineInfo, setLineInfo] = useState(null); // { addFriendUrl, campaignId, configured }
+
+  async function loadLineInfo() {
+    try {
+      let projectId = scope === 'project' ? ownerId : null;
+      const campaignId = scope === 'campaign' ? ownerId : null;
+      if (scope === 'campaign') {
+        const cs = await api.campaignStats(ownerId);
+        projectId = cs.campaign?.project_id || null;
+      }
+      if (!projectId) {
+        setLineInfo({ addFriendUrl: '', campaignId, configured: false });
+        return;
+      }
+      const lc = await api.projects.lineConfig(projectId);
+      setLineInfo({
+        addFriendUrl: lc.config?.add_friend_url || '',
+        campaignId,
+        configured: Boolean(lc.config?.add_friend_url)
+      });
+    } catch {
+      setLineInfo({ addFriendUrl: '', campaignId: scope === 'campaign' ? ownerId : null, configured: false });
+    }
+  }
+
+  // メール単位（campaignId あり）のときに、任意URLを計測リンク化する
+  function buildTrackingUrl(linkId, destUrl) {
+    if (!lineInfo?.campaignId || !destUrl) return null;
+    const base = baseUrl.replace(/\/$/, '');
+    return `${base}/click/${lineInfo.campaignId}/{{EMAIL_ID}}/${encodeURIComponent(linkId || 'link')}?url=${encodeURIComponent(destUrl)}`;
+  }
+
+  // LINE登録ステップ用の計測リンク（クリック→友だち追加URL）
+  function lineTrackingUrl(linkId) {
+    if (!lineInfo?.addFriendUrl) return null;
+    return buildTrackingUrl(linkId || 'line', lineInfo.addFriendUrl);
+  }
 
   async function load() {
     if (!ownerId) return;
@@ -55,6 +92,7 @@ export default function FunnelManager({ scope, ownerId }) {
 
   useEffect(() => {
     load();
+    loadLineInfo();
     setEditingId(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scope, ownerId]);
@@ -208,18 +246,80 @@ export default function FunnelManager({ scope, ownerId }) {
                 {step.type === 'click' && (
                   <div className="fse-detail">
                     <label className="lc-name">
-                      <span>linkId（ヒートマップのリンクIDを指定）</span>
+                      <span>遷移先URL（KPIサイト等。タグを置けないページ向け）</span>
                       <input
-                        value={step.key}
-                        onChange={(e) => patchStep(index, { key: e.target.value })}
-                        placeholder="例: link-1-a3f2"
+                        value={step.dest || ''}
+                        onChange={(e) => patchStep(index, { dest: e.target.value })}
+                        placeholder="https://example.com/kpi"
                       />
                     </label>
+                    <div className="fse-row">
+                      <button
+                        type="button"
+                        className="ghost"
+                        disabled={!step.dest}
+                        onClick={() =>
+                          patchStep(index, { key: step.key || `kpi-${Math.random().toString(36).slice(2, 6)}` })
+                        }
+                      >
+                        計測リンクを発行
+                      </button>
+                      <span className="field-hint">linkId: {step.key || '（未発行）'}</span>
+                    </div>
+                    {step.key && step.dest && buildTrackingUrl(step.key, step.dest) && (
+                      <div className="snippet">
+                        <div>
+                          <strong>メールに貼る計測リンク</strong>
+                          <button className="icon-button" onClick={() => copy(buildTrackingUrl(step.key, step.dest), `clk-${index}`)} title="コピー">
+                            {copied === `clk-${index}` ? <Check size={16} /> : <Copy size={16} />}
+                          </button>
+                        </div>
+                        <pre>{buildTrackingUrl(step.key, step.dest)}</pre>
+                      </div>
+                    )}
+                    {step.key && step.dest && !lineInfo?.campaignId && (
+                      <p className="fse-hint">
+                        プロジェクト単位ではメール個別の計測リンクは発行できません。メール単位のファネルで発行するか、
+                        各メールで linkId「{step.key}」の計測リンクに変換してください。
+                      </p>
+                    )}
                   </div>
                 )}
 
                 {step.type === 'line' && (
-                  <p className="fse-hint">LINE連携のfollowを自動でこのステップに集計します（設定不要）。</p>
+                  <div className="fse-detail">
+                    <label className="lc-name">
+                      <span>linkId（任意）</span>
+                      <input
+                        value={step.key}
+                        onChange={(e) => patchStep(index, { key: e.target.value })}
+                        placeholder="line"
+                      />
+                    </label>
+                    {!lineInfo?.configured && (
+                      <p className="fse-hint">
+                        LINEの友だち追加URLが未登録です。「LINE連携」タブで登録すると、ここに計測リンクが表示されます。
+                      </p>
+                    )}
+                    {lineTrackingUrl(step.key) && (
+                      <div className="snippet">
+                        <div>
+                          <strong>メールに貼るLINE計測リンク（クリック→友だち追加）</strong>
+                          <button className="icon-button" onClick={() => copy(lineTrackingUrl(step.key), `line-${index}`)} title="コピー">
+                            {copied === `line-${index}` ? <Check size={16} /> : <Copy size={16} />}
+                          </button>
+                        </div>
+                        <pre>{lineTrackingUrl(step.key)}</pre>
+                      </div>
+                    )}
+                    {lineInfo?.configured && !lineInfo?.campaignId && (
+                      <p className="fse-hint">
+                        プロジェクト単位ではメール個別の計測リンクは発行できません。メール単位のファネルで発行してください
+                        （友だち追加URL: <code>{lineInfo.addFriendUrl}</code> を各メールで計測リンクに変換）。
+                      </p>
+                    )}
+                    <p className="fse-hint">友だち追加(follow)は自動でこのステップに集計されます。</p>
+                  </div>
                 )}
               </div>
             ))}

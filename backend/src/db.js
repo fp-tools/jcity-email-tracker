@@ -752,7 +752,8 @@ function normalizeSteps(steps) {
     .map((s) => ({
       label: String(s.label || '').trim(),
       type: ['line', 'click', 'tag'].includes(s.type) ? s.type : 'tag',
-      key: String(s.key || '').trim()
+      key: String(s.key || '').trim(),
+      dest: s.dest !== undefined ? String(s.dest).trim() : ''
     }))
     .filter((s) => s.label);
 }
