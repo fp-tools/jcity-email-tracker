@@ -88,7 +88,7 @@ function extractOccurrences(html, campaignId) {
 
 // plan: 出現順index -> linkId（null はスキップ）で書き換え
 // 戻り値: { html, links:[{ linkId, url, trackingUrl }] }
-function buildHtml(html, base, campaignId, plan) {
+function buildHtml(html, base, campaignId, plan, labelByLinkId = {}) {
   const cleanBase = (base || '').replace(/\/$/, '');
   let doc;
   try {
@@ -104,7 +104,7 @@ function buildHtml(html, base, campaignId, plan) {
   const pushLink = (linkId, originalUrl, trackingUrl) => {
     if (seen.has(linkId)) return;
     seen.add(linkId);
-    links.push({ linkId, url: originalUrl, trackingUrl });
+    links.push({ linkId, url: originalUrl, trackingUrl, label: labelByLinkId[linkId] || linkId });
   };
 
   let i = -1;
@@ -215,22 +215,28 @@ export default function LinkTrackModal({ html, baseUrl, campaignId, onApply, onC
       return id;
     };
 
+    const labelByLinkId = {};
     groups.forEach((g, gi) => {
       if (!g.selected) return;
       if (g.split) {
         // 各箇所を別イベントとして個別の linkId にする
         g.occ.forEach((o, oi) => {
-          plan[o.idx] = uniqueId(g.names[oi] || `link-${gi + 1}-${oi + 1}`);
+          const label = (g.names[oi] || '').trim() || `link-${gi + 1}-${oi + 1}`;
+          const id = uniqueId(g.names[oi] || `link-${gi + 1}-${oi + 1}`);
+          plan[o.idx] = id;
+          labelByLinkId[id] = label;
         });
       } else {
         // まとめて1イベント（同じ linkId を共有）
+        const label = (g.name || '').trim() || `link-${gi + 1}`;
         const id = uniqueId(g.name || `link-${gi + 1}`);
         g.occ.forEach((o) => {
           plan[o.idx] = id;
         });
+        labelByLinkId[id] = label;
       }
     });
-    const result = buildHtml(html, baseUrl, campaignId, plan);
+    const result = buildHtml(html, baseUrl, campaignId, plan, labelByLinkId);
     onApply(result.html, result.links);
   }
 
@@ -248,7 +254,7 @@ export default function LinkTrackModal({ html, baseUrl, campaignId, onApply, onC
           ) : (
             <>
               <p className="guide-intro">
-                変換するURLを選び、ダッシュボードに表示する<strong>計測名</strong>を付けてください。
+                変換するURLを選び、レポートに表示する<strong>イベント名</strong>（例: 「○○用」）を付けてください。
                 同じURLが本文内に複数ある場合は、<strong>1つの計測にまとめる</strong>か
                 <strong>箇所ごとに別々に計測する</strong>かを選べます（別メールへの変換は自動で別計測になります）。
               </p>
@@ -292,7 +298,7 @@ export default function LinkTrackModal({ html, baseUrl, campaignId, onApply, onC
 
                         {!g.split ? (
                           <label className="lc-name">
-                            <span>計測名</span>
+                            <span>イベント名</span>
                             <input
                               value={g.name}
                               onChange={(event) => patchGroup(g.url, { name: event.target.value })}

@@ -162,6 +162,13 @@ export default function ProjectDetail() {
     setError('');
     try {
       await api.createCampaign({ ...form, id: draftId, project_id: projectId });
+      if (convertedLinks.length) {
+        try {
+          await api.saveLinkLabels(draftId, convertedLinks.map((l) => ({ link_id: l.linkId, label: l.label })));
+        } catch {
+          /* ラベル保存失敗は致命的でないため無視 */
+        }
+      }
       setForm(emptyForm);
       setShowForm(false);
       setConvertedLinks([]);

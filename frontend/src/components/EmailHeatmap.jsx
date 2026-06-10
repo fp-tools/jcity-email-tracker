@@ -233,17 +233,41 @@ export default function EmailHeatmap({ campaignId }) {
               <div className="table-wrap">
                 <table>
                   <thead>
-                    <tr><th>リンクID</th><th>テキスト</th><th>クリック</th><th>ユニーク</th><th>CV</th><th>CVユニーク</th></tr>
+                    <tr><th>イベント名</th><th>リンクID</th><th>テキスト</th><th>クリック</th><th>ユニーク</th><th>CV</th><th>CVユニーク</th></tr>
                   </thead>
                   <tbody>
                     {[...uniqueZones].sort((a, b) => b.clicks - a.clicks).map((z, i) => (
                       <tr key={`${z.linkId}-row-${i}`}>
+                        <td><strong>{data?.labels?.[z.linkId] || '-'}</strong></td>
                         <td>{z.linkId}</td>
                         <td>{z.text || '-'}</td>
                         <td>{z.clicks}</td>
                         <td>{z.unique_clicks}</td>
                         <td>{z.conversions || 0}</td>
                         <td>{z.unique_conversions || 0}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {mode === 'click' && data?.clicks_by_target?.length > 0 && (
+              <div className="table-wrap">
+                <div className="panel-heading" style={{ marginTop: 8 }}>
+                  <h3 style={{ margin: 0 }}>リンク先別クリック（受信者別URL出し分け）</h3>
+                </div>
+                <table>
+                  <thead>
+                    <tr><th>イベント名</th><th>遷移先URL</th><th>クリック</th><th>ユニーク</th></tr>
+                  </thead>
+                  <tbody>
+                    {data.clicks_by_target.map((row, i) => (
+                      <tr key={`${row.link_id}-${i}`}>
+                        <td><strong>{data?.labels?.[row.link_id] || row.link_id || '-'}</strong></td>
+                        <td className="cl-dest-cell">{row.target_url}</td>
+                        <td>{row.clicks}</td>
+                        <td>{row.unique_clicks}</td>
                       </tr>
                     ))}
                   </tbody>

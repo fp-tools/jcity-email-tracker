@@ -1,5 +1,5 @@
 import express from 'express';
-import { createCampaign, deleteCampaign, getCampaign, getCampaignStats, getClicksByLink, getConversionsByLink, getEmailBreakdown, listCampaigns, updateCampaign } from '../db.js';
+import { createCampaign, deleteCampaign, getCampaign, getCampaignStats, getClicksByLink, getClicksByTarget, getConversionsByLink, getEmailBreakdown, getLinkLabels, listCampaigns, saveLinkLabels, updateCampaign } from '../db.js';
 
 const router = express.Router();
 
@@ -50,8 +50,19 @@ router.get('/campaigns/:id/heatmap', (req, res) => {
   return res.json({
     html_content: campaign.html_content || '',
     clicks_by_link: getClicksByLink(req.params.id),
-    conversions_by_link: getConversionsByLink(req.params.id)
+    conversions_by_link: getConversionsByLink(req.params.id),
+    clicks_by_target: getClicksByTarget(req.params.id),
+    labels: getLinkLabels(req.params.id)
   });
+});
+
+router.post('/campaigns/:id/link-labels', (req, res, next) => {
+  try {
+    const labels = saveLinkLabels(req.params.id, (req.body || {}).labels || []);
+    res.json({ labels });
+  } catch (error) {
+    next(error);
+  }
 });
 
 export default router;

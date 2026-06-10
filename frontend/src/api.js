@@ -45,6 +45,7 @@ export const api = {
   campaignStats: (id) => get(`/api/campaigns/${encodeURIComponent(id)}/stats`),
   emailBreakdown: (id) => get(`/api/campaigns/${encodeURIComponent(id)}/email-breakdown`),
   campaignHeatmap: (id) => get(`/api/campaigns/${encodeURIComponent(id)}/heatmap`),
+  saveLinkLabels: (id, labels) => post(`/api/campaigns/${encodeURIComponent(id)}/link-labels`, { labels }),
   getGa4: () => get('/api/config/ga4'),
   saveGa4: (payload) => post('/api/config/ga4', payload),
   funnels: {

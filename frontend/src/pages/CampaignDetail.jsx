@@ -632,10 +632,17 @@ export default function CampaignDetail() {
           baseUrl={baseUrl}
           campaignId={campaignId}
           onClose={() => setShowLinkModal(false)}
-          onApply={(html, links) => {
+          onApply={async (html, links) => {
             setInfoDraft((current) => ({ ...current, html_content: html }));
             setConvertedLinks(links || []);
             setShowLinkModal(false);
+            if (links?.length) {
+              try {
+                await api.saveLinkLabels(campaignId, links.map((l) => ({ link_id: l.linkId, label: l.label })));
+              } catch (err) {
+                setError(err.message);
+              }
+            }
           }}
         />
       )}

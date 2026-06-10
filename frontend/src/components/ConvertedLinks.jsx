@@ -30,7 +30,7 @@ export default function ConvertedLinks({ links }) {
         {links.map((link, index) => (
           <div className="converted-link" key={`${link.linkId}-${index}`}>
             <div className="converted-link-head">
-              <strong>{link.linkId}</strong>
+              <strong>{link.label || link.linkId}</strong>
               <span className="cl-dest" title={link.url}>→ {link.url}</span>
               <button
                 className="icon-button"

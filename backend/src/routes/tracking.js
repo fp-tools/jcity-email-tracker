@@ -30,6 +30,7 @@ function recordAndDispatch(req, eventType, extra = {}) {
     event_type: eventType,
     link_id: extra.link_id || null,
     cv_point: extra.cv_point || null,
+    target_url: extra.target_url || null,
     client_id: req.query.client_id,
     ...requestMeta(req)
   };
@@ -59,7 +60,18 @@ router.get('/pixel/:campaignId/:emailId', (req, res) => {
 });
 
 router.get('/click/:campaignId/:emailId/:linkId', (req, res) => {
-  const target = req.query.url;
+  // 遷移先は ?url= 以降の生文字列から取得する。
+  // jcityの受信者別URL出し分け（マージタグ）でクエリ付き・未エンコードのURLが入っても壊れないようにするため。
+  let target = req.query.url;
+  const marker = req.originalUrl.indexOf('?url=');
+  if (marker >= 0) {
+    const raw = req.originalUrl.slice(marker + 5);
+    try {
+      target = decodeURIComponent(raw);
+    } catch {
+      target = raw;
+    }
+  }
   if (!target) return res.status(400).send('Missing url parameter');
 
   let redirectUrl;
@@ -73,13 +85,16 @@ router.get('/click/:campaignId/:emailId/:linkId', (req, res) => {
     return res.status(400).send('Only http and https redirects are allowed');
   }
 
+  // 実際の遷移先URL（jcity/トラッキングのパラメータを付与する前）を計測用に保存
+  const destinationUrl = redirectUrl.toString();
+
   if (process.env.APPEND_TRACKING_PARAMS !== 'false') {
     redirectUrl.searchParams.set('jcity_campaign_id', req.params.campaignId);
     redirectUrl.searchParams.set('jcity_email_id', req.params.emailId);
     redirectUrl.searchParams.set('jcity_link_id', req.params.linkId);
   }
 
-  recordAndDispatch(req, 'click', { link_id: req.params.linkId });
+  recordAndDispatch(req, 'click', { link_id: req.params.linkId, target_url: destinationUrl });
 
   // 遷移先がLINE友だち追加URLなら、CV推定紐付け用にクリックを記録する（方式B。ボットは除外）
   if (LINE_HOST_RE.test(redirectUrl.hostname) && !isBotUserAgent(req.get('user-agent') || '')) {

@@ -69,6 +69,7 @@ addColumnIfNotExists('email_events', 'device_type', 'TEXT');
 addColumnIfNotExists('email_events', 'os', 'TEXT');
 addColumnIfNotExists('email_events', 'cv_point', 'TEXT');
 addColumnIfNotExists('email_events', 'is_bot', 'INTEGER DEFAULT 0');
+addColumnIfNotExists('email_events', 'target_url', 'TEXT');
 
 // ファネル（経路）定義
 db.exec(`
@@ -84,6 +85,14 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_funnels_owner ON funnels (scope, owner_id);
   CREATE INDEX IF NOT EXISTS idx_email_events_cv_point ON email_events (cv_point);
+
+  CREATE TABLE IF NOT EXISTS link_labels (
+    campaign_id TEXT NOT NULL,
+    link_id TEXT NOT NULL,
+    label TEXT NOT NULL DEFAULT '',
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (campaign_id, link_id)
+  );
 `);
 
 // LINE Messaging API 連携（プロジェクト単位の設定 + クリック推定紐付け）
@@ -216,8 +225,8 @@ const updateCampaignStmt = db.prepare(`
 const deleteCampaignStmt = db.prepare('DELETE FROM campaigns WHERE id = ?');
 
 const insertEventStmt = db.prepare(`
-  INSERT INTO email_events (campaign_id, email_id, event_type, link_id, ip_address, user_agent, device_type, os, cv_point, is_bot)
-  VALUES (@campaign_id, @email_id, @event_type, @link_id, @ip_address, @user_agent, @device_type, @os, @cv_point, @is_bot)
+  INSERT INTO email_events (campaign_id, email_id, event_type, link_id, ip_address, user_agent, device_type, os, cv_point, is_bot, target_url)
+  VALUES (@campaign_id, @email_id, @event_type, @link_id, @ip_address, @user_agent, @device_type, @os, @cv_point, @is_bot, @target_url)
 `);
 
 const statsStmt = db.prepare(`
@@ -300,6 +309,19 @@ const clicksByLinkStmt = db.prepare(`
   FROM email_events
   WHERE campaign_id = ? AND event_type = 'click' AND is_bot = 0 AND link_id IS NOT NULL AND link_id <> ''
   GROUP BY link_id
+  ORDER BY clicks DESC
+`);
+
+// 実際の遷移先URLごとのクリック内訳（jcityの受信者別URL出し分けに対応）
+const clicksByTargetStmt = db.prepare(`
+  SELECT
+    link_id,
+    target_url,
+    COUNT(*) AS clicks,
+    COUNT(DISTINCT email_id) AS unique_clicks
+  FROM email_events
+  WHERE campaign_id = ? AND event_type = 'click' AND is_bot = 0 AND target_url IS NOT NULL AND target_url <> ''
+  GROUP BY link_id, target_url
   ORDER BY clicks DESC
 `);
 
@@ -564,7 +586,8 @@ export function recordEvent(event) {
     device_type: parsed.device_type,
     os: parsed.os,
     cv_point: event.cv_point || null,
-    is_bot: isBot
+    is_bot: isBot,
+    target_url: event.target_url || null
   });
 }
 
@@ -602,6 +625,43 @@ export function listEmailsByProject(projectId) {
 export function getClicksByLink(campaignId) {
   return clicksByLinkStmt.all(campaignId).map((row) => ({
     link_id: row.link_id,
+    clicks: Number(row.clicks || 0),
+    unique_clicks: Number(row.unique_clicks || 0)
+  }));
+}
+
+const upsertLinkLabelStmt = db.prepare(`
+  INSERT INTO link_labels (campaign_id, link_id, label, updated_at)
+  VALUES (@campaign_id, @link_id, @label, CURRENT_TIMESTAMP)
+  ON CONFLICT(campaign_id, link_id) DO UPDATE SET label = excluded.label, updated_at = CURRENT_TIMESTAMP
+`);
+const linkLabelsStmt = db.prepare('SELECT link_id, label FROM link_labels WHERE campaign_id = ?');
+
+export function saveLinkLabels(campaignId, labels = []) {
+  const rows = (Array.isArray(labels) ? labels : []).filter((l) => l && l.link_id);
+  const tx = db.transaction(() => {
+    for (const l of rows) {
+      upsertLinkLabelStmt.run({
+        campaign_id: campaignId,
+        link_id: String(l.link_id),
+        label: String(l.label || '').trim()
+      });
+    }
+  });
+  tx();
+  return getLinkLabels(campaignId);
+}
+
+export function getLinkLabels(campaignId) {
+  const map = {};
+  for (const row of linkLabelsStmt.all(campaignId)) map[row.link_id] = row.label;
+  return map;
+}
+
+export function getClicksByTarget(campaignId) {
+  return clicksByTargetStmt.all(campaignId).map((row) => ({
+    link_id: row.link_id,
+    target_url: row.target_url,
     clicks: Number(row.clicks || 0),
     unique_clicks: Number(row.unique_clicks || 0)
   }));
