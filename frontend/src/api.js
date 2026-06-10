@@ -46,5 +46,15 @@ export const api = {
   emailBreakdown: (id) => get(`/api/campaigns/${encodeURIComponent(id)}/email-breakdown`),
   campaignHeatmap: (id) => get(`/api/campaigns/${encodeURIComponent(id)}/heatmap`),
   getGa4: () => get('/api/config/ga4'),
-  saveGa4: (payload) => post('/api/config/ga4', payload)
+  saveGa4: (payload) => post('/api/config/ga4', payload),
+  funnels: {
+    list: (scope, ownerId) =>
+      get(`/api/funnels?scope=${encodeURIComponent(scope)}&owner_id=${encodeURIComponent(ownerId)}`),
+    create: (payload) => post('/api/funnels', payload),
+    update: (id, payload) => request(`/api/funnels/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    }),
+    delete: (id) => del(`/api/funnels/${encodeURIComponent(id)}`)
+  }
 };

@@ -5,6 +5,7 @@ import { api } from '../api.js';
 import HtmlEditor from '../components/HtmlEditor.jsx';
 import LinkTrackModal from '../components/LinkTrackModal.jsx';
 import ConvertedLinks from '../components/ConvertedLinks.jsx';
+import FunnelManager from '../components/FunnelManager.jsx';
 
 const emptyForm = {
   name: '',
@@ -223,7 +224,10 @@ export default function ProjectDetail() {
         <button className={activeTab === 'line' ? 'active' : ''} onClick={() => setActiveTab('line')}>
           <MessageCircle size={15} /> LINE連携
         </button>
+        <button className={activeTab === 'funnel' ? 'active' : ''} onClick={() => setActiveTab('funnel')}>ファネル</button>
       </div>
+
+      {activeTab === 'funnel' && <FunnelManager scope="project" ownerId={projectId} />}
 
       {activeTab === 'list' && (
         <section className="panel">

@@ -29,6 +29,7 @@ function recordAndDispatch(req, eventType, extra = {}) {
     email_id: emailId,
     event_type: eventType,
     link_id: extra.link_id || null,
+    cv_point: extra.cv_point || null,
     client_id: req.query.client_id,
     ...requestMeta(req)
   };
@@ -103,14 +104,14 @@ router.get('/click/:campaignId/:emailId/:linkId', (req, res) => {
 
 router.post('/api/conversions', express.json(), (req, res, next) => {
   try {
-    const { campaign_id, email_id, link_id, client_id } = req.body || {};
+    const { campaign_id, email_id, link_id, client_id, cv_point } = req.body || {};
     if (!campaign_id || !email_id) {
       return res.status(400).json({ error: 'campaign_id and email_id are required' });
     }
 
     req.params = { campaignId: campaign_id, emailId: email_id };
     req.query.client_id = client_id;
-    const ok = recordAndDispatch(req, 'conversion', { link_id });
+    const ok = recordAndDispatch(req, 'conversion', { link_id, cv_point });
     if (!ok) return res.status(404).json({ error: 'Campaign not found' });
     return res.status(202).json({ ok: true });
   } catch (error) {
@@ -119,7 +120,7 @@ router.post('/api/conversions', express.json(), (req, res, next) => {
 });
 
 router.get('/conversion/:campaignId/:emailId', (req, res) => {
-  const ok = recordAndDispatch(req, 'conversion', { link_id: req.query.link_id });
+  const ok = recordAndDispatch(req, 'conversion', { link_id: req.query.link_id, cv_point: req.query.cv_point });
   if (!ok) return res.status(404).json({ error: 'Campaign not found' });
   return res.status(204).send();
 });

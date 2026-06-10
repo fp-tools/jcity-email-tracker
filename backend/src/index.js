@@ -8,6 +8,7 @@ import campaignsRouter from './routes/campaigns.js';
 import configRouter from './routes/config.js';
 import projectsRouter from './routes/projects.js';
 import trackingRouter from './routes/tracking.js';
+import funnelsRouter from './routes/funnels.js';
 import { lineApiRouter, lineWebhookRouter } from './routes/line.js';
 
 const app = express();
@@ -31,6 +32,7 @@ app.use('/api', projectsRouter);
 app.use('/api', campaignsRouter);
 app.use('/api', configRouter);
 app.use('/api', lineApiRouter);
+app.use('/api', funnelsRouter);
 
 app.use(express.static(frontendDist));
 app.get('*', (req, res, next) => {

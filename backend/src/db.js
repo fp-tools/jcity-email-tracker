@@ -67,6 +67,23 @@ addColumnIfNotExists('campaigns', 'html_content', "TEXT DEFAULT ''");
 addColumnIfNotExists('campaigns', 'send_time', "TEXT DEFAULT ''");
 addColumnIfNotExists('email_events', 'device_type', 'TEXT');
 addColumnIfNotExists('email_events', 'os', 'TEXT');
+addColumnIfNotExists('email_events', 'cv_point', 'TEXT');
+
+// ファネル（経路）定義
+db.exec(`
+  CREATE TABLE IF NOT EXISTS funnels (
+    id TEXT PRIMARY KEY,
+    scope TEXT NOT NULL,
+    owner_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    steps TEXT NOT NULL DEFAULT '[]',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_funnels_owner ON funnels (scope, owner_id);
+  CREATE INDEX IF NOT EXISTS idx_email_events_cv_point ON email_events (cv_point);
+`);
 
 // LINE Messaging API 連携（プロジェクト単位の設定 + クリック推定紐付け）
 db.exec(`
@@ -198,8 +215,8 @@ const updateCampaignStmt = db.prepare(`
 const deleteCampaignStmt = db.prepare('DELETE FROM campaigns WHERE id = ?');
 
 const insertEventStmt = db.prepare(`
-  INSERT INTO email_events (campaign_id, email_id, event_type, link_id, ip_address, user_agent, device_type, os)
-  VALUES (@campaign_id, @email_id, @event_type, @link_id, @ip_address, @user_agent, @device_type, @os)
+  INSERT INTO email_events (campaign_id, email_id, event_type, link_id, ip_address, user_agent, device_type, os, cv_point)
+  VALUES (@campaign_id, @email_id, @event_type, @link_id, @ip_address, @user_agent, @device_type, @os, @cv_point)
 `);
 
 const statsStmt = db.prepare(`
@@ -511,7 +528,8 @@ export function recordEvent(event) {
     ip_address: event.ip_address || null,
     user_agent: event.user_agent || null,
     device_type: parsed.device_type,
-    os: parsed.os
+    os: parsed.os,
+    cv_point: event.cv_point || null
   });
 }
 
@@ -689,7 +707,8 @@ export function recordLineEvent(projectId, { line_user_id, event_type }) {
         event_type: 'conversion',
         link_id: candidate.link_id,
         ip_address: candidate.ip_address,
-        user_agent: 'line-webhook'
+        user_agent: 'line-webhook',
+        cv_point: 'line'
       });
       attributed = { campaign_id: candidate.campaign_id, email_id: candidate.email_id };
     }
@@ -704,4 +723,114 @@ export function recordLineEvent(projectId, { line_user_id, event_type }) {
   });
 
   return { attributed };
+}
+
+// ---- ファネル（経路）----
+const listFunnelsStmt = db.prepare('SELECT * FROM funnels WHERE scope = ? AND owner_id = ? ORDER BY created_at');
+const getFunnelStmt = db.prepare('SELECT * FROM funnels WHERE id = ?');
+const insertFunnelStmt = db.prepare(`
+  INSERT INTO funnels (id, scope, owner_id, name, steps)
+  VALUES (@id, @scope, @owner_id, @name, @steps)
+`);
+const updateFunnelStmt = db.prepare(`
+  UPDATE funnels SET name = @name, steps = @steps, updated_at = CURRENT_TIMESTAMP WHERE id = @id
+`);
+const deleteFunnelStmt = db.prepare('DELETE FROM funnels WHERE id = ?');
+
+function parseSteps(raw) {
+  try {
+    const arr = JSON.parse(raw || '[]');
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+
+function normalizeSteps(steps) {
+  if (!Array.isArray(steps)) return [];
+  return steps
+    .map((s) => ({
+      label: String(s.label || '').trim(),
+      type: ['line', 'click', 'tag'].includes(s.type) ? s.type : 'tag',
+      key: String(s.key || '').trim()
+    }))
+    .filter((s) => s.label);
+}
+
+function hydrateFunnel(row) {
+  return { ...row, steps: parseSteps(row.steps) };
+}
+
+export function listFunnels(scope, ownerId) {
+  return listFunnelsStmt.all(scope, ownerId).map(hydrateFunnel);
+}
+
+export function getFunnel(id) {
+  const row = getFunnelStmt.get(id);
+  return row ? hydrateFunnel(row) : null;
+}
+
+export function createFunnel(input = {}) {
+  const scope = input.scope === 'project' ? 'project' : 'campaign';
+  const owner_id = String(input.owner_id || '').trim();
+  const name = String(input.name || '').trim();
+  if (!owner_id || !name) {
+    const error = new Error('owner_id and name are required');
+    error.status = 400;
+    throw error;
+  }
+  const id = nanoid(10);
+  insertFunnelStmt.run({ id, scope, owner_id, name, steps: JSON.stringify(normalizeSteps(input.steps)) });
+  return getFunnel(id);
+}
+
+export function updateFunnel(id, input = {}) {
+  const existing = getFunnelStmt.get(id);
+  if (!existing) return null;
+  updateFunnelStmt.run({
+    id,
+    name: input.name !== undefined ? String(input.name).trim() : existing.name,
+    steps: input.steps !== undefined ? JSON.stringify(normalizeSteps(input.steps)) : existing.steps
+  });
+  return getFunnel(id);
+}
+
+export function deleteFunnel(id) {
+  const existing = getFunnelStmt.get(id);
+  if (!existing) return false;
+  deleteFunnelStmt.run(id);
+  return true;
+}
+
+// 各ステップの到達数（ユニーク email_id / 延べ）を集計
+export function getFunnelResults(funnel) {
+  const scopeCond =
+    funnel.scope === 'project'
+      ? 'campaign_id IN (SELECT id FROM campaigns WHERE project_id = ?)'
+      : 'campaign_id = ?';
+
+  return funnel.steps.map((step) => {
+    const params = [funnel.owner_id];
+    let cond;
+    if (step.type === 'click') {
+      cond = "event_type = 'click' AND link_id = ?";
+      params.push(step.key);
+    } else if (step.type === 'line') {
+      cond = "event_type = 'conversion' AND cv_point = 'line'";
+    } else {
+      cond = "event_type = 'conversion' AND cv_point = ?";
+      params.push(step.key);
+    }
+    const row = db
+      .prepare(
+        `SELECT COUNT(*) AS total, COUNT(DISTINCT email_id) AS uniq
+         FROM email_events WHERE ${scopeCond} AND ${cond}`
+      )
+      .get(...params);
+    return {
+      ...step,
+      total: Number(row?.total || 0),
+      unique: Number(row?.uniq || 0)
+    };
+  });
 }

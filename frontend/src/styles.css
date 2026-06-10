@@ -779,6 +779,137 @@ textarea:focus {
   text-overflow: ellipsis;
 }
 
+/* ---- ファネル ---- */
+.funnel-editor {
+  display: grid;
+  gap: 12px;
+  border: 1px solid #dce3e6;
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 14px;
+}
+
+.funnel-steps-edit {
+  display: grid;
+  gap: 10px;
+}
+
+.funnel-step-edit {
+  border: 1px solid #e2e8ea;
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.fse-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.fse-no {
+  width: 24px;
+  height: 24px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #e8f7f4;
+  color: #12613f;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.fse-label {
+  flex: 1;
+  min-width: 160px;
+}
+
+.fse-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.fse-detail {
+  padding-left: 32px;
+  display: grid;
+  gap: 8px;
+}
+
+.fse-hint {
+  margin: 0;
+  padding-left: 32px;
+  font-size: 12px;
+  color: #718089;
+}
+
+.funnel-list {
+  display: grid;
+  gap: 14px;
+}
+
+.funnel-card {
+  border: 1px solid #dce3e6;
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.funnel-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.funnel-steps {
+  display: grid;
+  gap: 12px;
+}
+
+.funnel-step-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.funnel-step-name {
+  font-size: 14px;
+  color: #17202a;
+}
+
+.funnel-step-counts {
+  font-size: 13px;
+  color: #52636b;
+}
+
+.funnel-bar-wrap {
+  background: #eef2f3;
+  border-radius: 6px;
+  overflow: hidden;
+  height: 22px;
+}
+
+.funnel-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #0d9488, #2fb9a3);
+  border-radius: 6px;
+  transition: width 0.3s ease;
+}
+
+.funnel-step-rates {
+  display: flex;
+  gap: 14px;
+  margin-top: 4px;
+  font-size: 12px;
+  color: #718089;
+}
+
 .lc-split-hint {
   margin: 0;
   padding-left: 26px;

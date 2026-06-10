@@ -18,6 +18,7 @@ import EmailHeatmap from '../components/EmailHeatmap.jsx';
 import HtmlEditor from '../components/HtmlEditor.jsx';
 import LinkTrackModal from '../components/LinkTrackModal.jsx';
 import ConvertedLinks from '../components/ConvertedLinks.jsx';
+import FunnelManager from '../components/FunnelManager.jsx';
 
 function currentOrigin() {
   return window.location.origin;
@@ -233,6 +234,7 @@ export default function CampaignDetail() {
               <button className={activeTab === 'stats' ? 'active' : ''} onClick={() => setActiveTab('stats')}>概要</button>
               <button className={activeTab === 'emails' ? 'active' : ''} onClick={() => setActiveTab('emails')}>メール別詳細</button>
               <button className={activeTab === 'heatmap' ? 'active' : ''} onClick={() => setActiveTab('heatmap')}>ヒートマップ</button>
+              <button className={activeTab === 'funnel' ? 'active' : ''} onClick={() => setActiveTab('funnel')}>ファネル</button>
             </div>
 
             <section className="panel sent-editor">
@@ -549,6 +551,8 @@ export default function CampaignDetail() {
           )}
 
           {activeTab === 'heatmap' && <EmailHeatmap campaignId={campaignId} />}
+
+          {activeTab === 'funnel' && <FunnelManager scope="campaign" ownerId={campaignId} />}
         </>
       )}
 
