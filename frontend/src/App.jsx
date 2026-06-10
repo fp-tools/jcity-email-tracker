@@ -1,28 +1,23 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { NavLink, Outlet, useLocation, useParams } from 'react-router-dom';
 import { Activity, BarChart3, FolderKanban, RefreshCcw, Settings as SettingsIcon } from 'lucide-react';
-import Dashboard from './pages/Dashboard.jsx';
-import Projects from './pages/Projects.jsx';
-import ProjectDetail from './pages/ProjectDetail.jsx';
-import CampaignDetail from './pages/CampaignDetail.jsx';
-import Settings from './pages/Settings.jsx';
 import { api } from './api.js';
 
 const tabs = [
-  { id: 'dashboard', label: 'ダッシュボード', icon: BarChart3 },
-  { id: 'projects', label: 'プロジェクト', icon: FolderKanban },
-  { id: 'settings', label: 'GA4設定', icon: SettingsIcon }
+  { to: '/', label: 'ダッシュボード', icon: BarChart3, end: true },
+  { to: '/projects', label: 'プロジェクト', icon: FolderKanban, end: false },
+  { to: '/settings', label: 'GA4設定', icon: SettingsIcon, end: false }
 ];
 
 export default function App() {
-  const [view, setView] = useState('dashboard');
-  const [currentProjectId, setCurrentProjectId] = useState(null);
-  const [selectedCampaignId, setSelectedCampaignId] = useState(null);
   const [campaigns, setCampaigns] = useState([]);
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const location = useLocation();
+  const params = useParams();
 
-  async function loadAll() {
+  const loadAll = useCallback(async () => {
     setError('');
     setLoading(true);
     try {
@@ -37,46 +32,34 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
   useEffect(() => {
     loadAll();
     const interval = window.setInterval(loadAll, 15000);
     return () => window.clearInterval(interval);
-  }, []);
+  }, [loadAll]);
 
-  const selectedCampaign = useMemo(
-    () => campaigns.find((campaign) => campaign.id === selectedCampaignId),
-    [campaigns, selectedCampaignId]
+  const title = useMemo(() => {
+    const path = location.pathname;
+    if (path === '/') return 'ダッシュボード';
+    if (path.startsWith('/projects/')) {
+      const project = projects.find((item) => item.id === params.projectId);
+      return project?.name || 'プロジェクト詳細';
+    }
+    if (path.startsWith('/projects')) return 'プロジェクト';
+    if (path.startsWith('/campaigns/')) {
+      const campaign = campaigns.find((item) => item.id === params.campaignId);
+      return campaign?.name || 'メール詳細';
+    }
+    if (path.startsWith('/settings')) return 'GA4設定';
+    return 'メールトラッキング管理';
+  }, [location.pathname, params, projects, campaigns]);
+
+  const context = useMemo(
+    () => ({ campaigns, projects, loading, loadAll }),
+    [campaigns, projects, loading, loadAll]
   );
-
-  const currentProject = useMemo(
-    () => projects.find((project) => project.id === currentProjectId),
-    [projects, currentProjectId]
-  );
-
-  function openProject(projectId) {
-    setCurrentProjectId(projectId);
-    setSelectedCampaignId(null);
-    setView('project');
-  }
-
-  function openEmail(campaignId) {
-    setSelectedCampaignId(campaignId);
-    setView('email');
-  }
-
-  function openTab(tabId) {
-    setView(tabId);
-    if (tabId !== 'project') setCurrentProjectId(null);
-    if (tabId !== 'email') setSelectedCampaignId(null);
-  }
-
-  const title = view === 'project'
-    ? currentProject?.name || 'プロジェクト詳細'
-    : view === 'email'
-      ? selectedCampaign?.name || 'メール詳細'
-      : tabs.find((tab) => tab.id === view)?.label;
 
   return (
     <div className="app-shell">
@@ -92,15 +75,16 @@ export default function App() {
           {tabs.map((tab) => {
             const Icon = tab.icon;
             return (
-              <button
-                key={tab.id}
-                className={view === tab.id ? 'active' : ''}
-                onClick={() => openTab(tab.id)}
+              <NavLink
+                key={tab.to}
+                to={tab.to}
+                end={tab.end}
+                className={({ isActive }) => (isActive ? 'active' : '')}
                 title={tab.label}
               >
                 <Icon size={18} />
                 <span>{tab.label}</span>
-              </button>
+              </NavLink>
             );
           })}
         </nav>
@@ -119,29 +103,7 @@ export default function App() {
 
         {error && <div className="alert">{error}</div>}
 
-        {view === 'dashboard' && (
-          <Dashboard campaigns={campaigns} loading={loading} onOpenCampaign={openEmail} />
-        )}
-        {view === 'projects' && (
-          <Projects projects={projects} onCreated={loadAll} onOpenProject={openProject} />
-        )}
-        {view === 'project' && (
-          <ProjectDetail
-            projectId={currentProjectId}
-            fallback={currentProject}
-            onBack={() => setView('projects')}
-            onOpenEmail={openEmail}
-            onChanged={loadAll}
-          />
-        )}
-        {view === 'email' && (
-          <CampaignDetail
-            campaignId={selectedCampaignId}
-            fallback={selectedCampaign}
-            onBack={() => setView(currentProjectId ? 'project' : 'projects')}
-          />
-        )}
-        {view === 'settings' && <Settings />}
+        <Outlet context={context} />
       </main>
     </div>
   );

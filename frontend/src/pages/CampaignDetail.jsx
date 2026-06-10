@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, Copy, RefreshCcw } from 'lucide-react';
+import { useNavigate, useOutletContext, useParams } from 'react-router-dom';
+import { ArrowLeft, Copy, Link as LinkIcon, Pencil, RefreshCcw, Trash2 } from 'lucide-react';
 import {
   Bar,
   BarChart,
@@ -14,6 +15,8 @@ import {
 } from 'recharts';
 import { api } from '../api.js';
 import EmailHeatmap from '../components/EmailHeatmap.jsx';
+import HtmlEditor from '../components/HtmlEditor.jsx';
+import LinkTrackModal from '../components/LinkTrackModal.jsx';
 
 function currentOrigin() {
   return window.location.origin;
@@ -33,7 +36,11 @@ const metricLabels = {
 
 const COLORS = ['#0d9488', '#6366f1', '#f59e0b', '#ef4444', '#64748b'];
 
-export default function CampaignDetail({ campaignId, fallback, onBack }) {
+export default function CampaignDetail() {
+  const { campaignId } = useParams();
+  const navigate = useNavigate();
+  const { campaigns, loadAll } = useOutletContext();
+  const fallback = campaigns.find((item) => item.id === campaignId);
   const [campaign, setCampaign] = useState(fallback);
   const [baseUrl, setBaseUrl] = useState(currentOrigin());
   const [destinationUrl, setDestinationUrl] = useState('https://your-site.com/lp');
@@ -46,6 +53,16 @@ export default function CampaignDetail({ campaignId, fallback, onBack }) {
   const [editingSent, setEditingSent] = useState(false);
   const [sentDraft, setSentDraft] = useState('');
   const [savingSent, setSavingSent] = useState(false);
+  const [editingInfo, setEditingInfo] = useState(false);
+  const [infoDraft, setInfoDraft] = useState({ name: '', subject: '', jcity_id: '', send_time: '', html_content: '' });
+  const [savingInfo, setSavingInfo] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [showLinkModal, setShowLinkModal] = useState(false);
+
+  function onBack() {
+    if (campaign?.project_id) navigate(`/projects/${campaign.project_id}`);
+    else navigate('/');
+  }
 
   async function loadStats() {
     if (!campaignId) return;
@@ -79,6 +96,8 @@ export default function CampaignDetail({ campaignId, fallback, onBack }) {
   useEffect(() => {
     setActiveTab('stats');
     setEmailBreakdown([]);
+    setEditingInfo(false);
+    setShowLinkModal(false);
   }, [campaignId]);
 
   useEffect(() => {
@@ -118,11 +137,57 @@ export default function CampaignDetail({ campaignId, fallback, onBack }) {
     try {
       await api.updateCampaign(campaignId, { total_sent: Number.parseInt(sentDraft, 10) || 0 });
       await loadStats();
+      await loadAll();
       setEditingSent(false);
     } catch (err) {
       setError(err.message);
     } finally {
       setSavingSent(false);
+    }
+  }
+
+  function startEditInfo() {
+    setInfoDraft({
+      name: campaign?.name || '',
+      subject: campaign?.subject || '',
+      jcity_id: campaign?.jcity_id || '',
+      send_time: campaign?.send_time || '',
+      html_content: campaign?.html_content || ''
+    });
+    setEditingInfo(true);
+  }
+
+  const updateInfo = (key) => (event) =>
+    setInfoDraft((current) => ({ ...current, [key]: event.target.value }));
+
+  async function saveInfo(event) {
+    event.preventDefault();
+    setSavingInfo(true);
+    setError('');
+    try {
+      await api.updateCampaign(campaignId, infoDraft);
+      await loadStats();
+      await loadAll();
+      setEditingInfo(false);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSavingInfo(false);
+    }
+  }
+
+  async function removeCampaign() {
+    if (!window.confirm('このメールを削除しますか？関連する開封・クリック・CVのデータもすべて削除され、元に戻せません。')) return;
+    setDeleting(true);
+    setError('');
+    try {
+      const target = campaign?.project_id;
+      await api.deleteCampaign(campaignId);
+      await loadAll();
+      navigate(target ? `/projects/${target}` : '/');
+    } catch (err) {
+      setError(err.message);
+      setDeleting(false);
     }
   }
 
@@ -138,10 +203,66 @@ export default function CampaignDetail({ campaignId, fallback, onBack }) {
 
   return (
     <div className="stack">
-      <button className="ghost" onClick={onBack}><ArrowLeft size={18} /> 戻る</button>
+      <div className="detail-actions">
+        <button className="ghost" onClick={onBack}><ArrowLeft size={18} /> 戻る</button>
+        <div className="detail-actions-right">
+          <button className="ghost" onClick={editingInfo ? () => setEditingInfo(false) : startEditInfo} disabled={!campaign}>
+            <Pencil size={16} /> {editingInfo ? '編集を閉じる' : '件名・本文を編集'}
+          </button>
+          <button className="ghost danger" onClick={removeCampaign} disabled={deleting || !campaign}>
+            <Trash2 size={16} /> {deleting ? '削除中...' : '削除'}
+          </button>
+        </div>
+      </div>
       {error && <div className="alert">{error}</div>}
       {campaign && (
         <>
+          {editingInfo && (
+            <section className="panel">
+              <div className="panel-heading"><h2>メール内容の編集</h2></div>
+              <form className="form email-form" onSubmit={saveInfo}>
+                <label>
+                  <span>キャンペーン名</span>
+                  <input value={infoDraft.name} onChange={updateInfo('name')} required />
+                </label>
+                <label>
+                  <span>件名（管理用）</span>
+                  <input value={infoDraft.subject} onChange={updateInfo('subject')} placeholder="jcityのメール件名" />
+                </label>
+                <label>
+                  <span>配信日</span>
+                  <input value={infoDraft.jcity_id} onChange={updateInfo('jcity_id')} type="date" />
+                </label>
+                <label>
+                  <span>配信時間</span>
+                  <input value={infoDraft.send_time} onChange={updateInfo('send_time')} type="time" />
+                </label>
+                <div className="full field">
+                  <span className="field-label">メール本文</span>
+                  <HtmlEditor
+                    value={infoDraft.html_content}
+                    onChange={(html) => setInfoDraft((current) => ({ ...current, html_content: html }))}
+                    placeholder="文字を入力して書式設定、または「HTML編集」で既存のHTMLを貼り付け"
+                  />
+                  <button
+                    type="button"
+                    className="ghost link-convert-trigger"
+                    onClick={() => setShowLinkModal(true)}
+                  >
+                    <LinkIcon size={16} /> 本文内のリンクを計測リンクに一括変換
+                  </button>
+                </div>
+                <div className="form-actions">
+                  <button className="primary" disabled={savingInfo}>
+                    {savingInfo ? '保存中...' : '変更を保存'}
+                  </button>
+                  <button type="button" className="ghost" onClick={() => setEditingInfo(false)} disabled={savingInfo}>
+                    キャンセル
+                  </button>
+                </div>
+              </form>
+            </section>
+          )}
           <div className="tabs">
             <button className={activeTab === 'stats' ? 'active' : ''} onClick={() => setActiveTab('stats')}>概要</button>
             <button className={activeTab === 'emails' ? 'active' : ''} onClick={() => setActiveTab('emails')}>メール別詳細</button>
@@ -401,6 +522,19 @@ export default function CampaignDetail({ campaignId, fallback, onBack }) {
 
           {activeTab === 'heatmap' && <EmailHeatmap campaignId={campaignId} />}
         </>
+      )}
+
+      {showLinkModal && (
+        <LinkTrackModal
+          html={infoDraft.html_content}
+          baseUrl={baseUrl}
+          campaignId={campaignId}
+          onClose={() => setShowLinkModal(false)}
+          onApply={(html) => {
+            setInfoDraft((current) => ({ ...current, html_content: html }));
+            setShowLinkModal(false);
+          }}
+        />
       )}
     </div>
   );

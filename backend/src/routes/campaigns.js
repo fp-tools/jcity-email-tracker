@@ -1,5 +1,5 @@
 import express from 'express';
-import { createCampaign, getCampaign, getCampaignStats, getClicksByLink, getEmailBreakdown, listCampaigns, updateCampaign } from '../db.js';
+import { createCampaign, deleteCampaign, getCampaign, getCampaignStats, getClicksByLink, getEmailBreakdown, listCampaigns, updateCampaign } from '../db.js';
 
 const router = express.Router();
 
@@ -24,6 +24,12 @@ router.patch('/campaigns/:id', (req, res, next) => {
   } catch (error) {
     next(error);
   }
+});
+
+router.delete('/campaigns/:id', (req, res) => {
+  const deleted = deleteCampaign(req.params.id);
+  if (!deleted) return res.status(404).json({ error: 'Campaign not found' });
+  return res.json({ ok: true });
 });
 
 router.get('/campaigns/:id/stats', (req, res) => {

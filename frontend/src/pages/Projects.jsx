@@ -1,8 +1,11 @@
 import { useState } from 'react';
+import { useNavigate, useOutletContext } from 'react-router-dom';
 import { FolderPlus } from 'lucide-react';
 import { api } from '../api.js';
 
-export default function Projects({ projects, onCreated, onOpenProject }) {
+export default function Projects() {
+  const { projects, loadAll } = useOutletContext();
+  const navigate = useNavigate();
   const [form, setForm] = useState({ name: '', description: '' });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -14,7 +17,7 @@ export default function Projects({ projects, onCreated, onOpenProject }) {
     try {
       await api.projects.create(form);
       setForm({ name: '', description: '' });
-      await onCreated();
+      await loadAll();
     } catch (err) {
       setError(err.message);
     } finally {
@@ -54,7 +57,7 @@ export default function Projects({ projects, onCreated, onOpenProject }) {
         </div>
         <div className="project-list">
           {projects.map((project) => (
-            <button key={project.id} onClick={() => onOpenProject(project.id)}>
+            <button key={project.id} onClick={() => navigate(`/projects/${project.id}`)}>
               <strong>{project.name}</strong>
               {project.description && <small>{project.description}</small>}
               <span>

@@ -64,6 +64,7 @@ function addColumnIfNotExists(table, column, definition) {
 
 addColumnIfNotExists('campaigns', 'project_id', 'TEXT REFERENCES projects(id) ON DELETE SET NULL');
 addColumnIfNotExists('campaigns', 'html_content', "TEXT DEFAULT ''");
+addColumnIfNotExists('campaigns', 'send_time', "TEXT DEFAULT ''");
 addColumnIfNotExists('email_events', 'device_type', 'TEXT');
 addColumnIfNotExists('email_events', 'os', 'TEXT');
 
@@ -111,8 +112,8 @@ const deleteProjectStmt = db.prepare('DELETE FROM projects WHERE id = ?');
 const clearProjectCampaignsStmt = db.prepare('UPDATE campaigns SET project_id = NULL WHERE project_id = ?');
 
 const insertCampaign = db.prepare(`
-  INSERT INTO campaigns (id, name, subject, jcity_id, total_sent, project_id, html_content)
-  VALUES (@id, @name, @subject, @jcity_id, @total_sent, @project_id, @html_content)
+  INSERT INTO campaigns (id, name, subject, jcity_id, total_sent, project_id, html_content, send_time)
+  VALUES (@id, @name, @subject, @jcity_id, @total_sent, @project_id, @html_content, @send_time)
 `);
 
 const listCampaignsStmt = db.prepare(`
@@ -152,9 +153,11 @@ const getCampaignStmt = db.prepare('SELECT * FROM campaigns WHERE id = ?');
 
 const updateCampaignStmt = db.prepare(`
   UPDATE campaigns
-  SET name = @name, subject = @subject, jcity_id = @jcity_id, total_sent = @total_sent
+  SET name = @name, subject = @subject, jcity_id = @jcity_id, total_sent = @total_sent, html_content = @html_content, send_time = @send_time
   WHERE id = @id
 `);
+
+const deleteCampaignStmt = db.prepare('DELETE FROM campaigns WHERE id = ?');
 
 const insertEventStmt = db.prepare(`
   INSERT INTO email_events (campaign_id, email_id, event_type, link_id, ip_address, user_agent, device_type, os)
@@ -346,7 +349,8 @@ export function createCampaign(input) {
     jcity_id: input.jcity_id?.trim() || '',
     total_sent: Math.max(0, Number.parseInt(input.total_sent || 0, 10) || 0),
     project_id: input.project_id || null,
-    html_content: input.html_content || ''
+    html_content: input.html_content || '',
+    send_time: input.send_time?.trim() || ''
   };
 
   if (!campaign.name) {
@@ -371,7 +375,11 @@ export function updateCampaign(id, input = {}) {
     total_sent:
       input.total_sent !== undefined
         ? Math.max(0, Number.parseInt(input.total_sent, 10) || 0)
-        : existing.total_sent
+        : existing.total_sent,
+    html_content:
+      input.html_content !== undefined ? String(input.html_content) : existing.html_content,
+    send_time:
+      input.send_time !== undefined ? String(input.send_time).trim() : existing.send_time
   };
 
   if (!next.name) {
@@ -382,6 +390,13 @@ export function updateCampaign(id, input = {}) {
 
   updateCampaignStmt.run(next);
   return getCampaignStmt.get(id);
+}
+
+export function deleteCampaign(id) {
+  const existing = getCampaignStmt.get(id);
+  if (!existing) return false;
+  deleteCampaignStmt.run(id);
+  return true;
 }
 
 export function listCampaigns() {

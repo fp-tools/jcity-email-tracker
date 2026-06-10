@@ -1,16 +1,26 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useOutletContext, useParams } from 'react-router-dom';
 import { ArrowLeft, MailPlus, RefreshCcw, Trash2 } from 'lucide-react';
 import { api } from '../api.js';
+import HtmlEditor from '../components/HtmlEditor.jsx';
 
 const emptyForm = {
   name: '',
   subject: '',
   jcity_id: '',
+  send_time: '',
   total_sent: '',
   html_content: ''
 };
 
-export default function ProjectDetail({ projectId, fallback, onBack, onOpenEmail, onChanged }) {
+export default function ProjectDetail() {
+  const { projectId } = useParams();
+  const navigate = useNavigate();
+  const { projects, loadAll } = useOutletContext();
+  const fallback = projects.find((item) => item.id === projectId);
+  const onBack = () => navigate('/projects');
+  const onOpenEmail = (campaignId) => navigate(`/campaigns/${campaignId}`);
+  const onChanged = loadAll;
   const [project, setProject] = useState(fallback);
   const [emails, setEmails] = useState([]);
   const [activeTab, setActiveTab] = useState('list');
@@ -136,18 +146,21 @@ export default function ProjectDetail({ projectId, fallback, onBack, onOpenEmail
                 <input value={form.jcity_id} onChange={update('jcity_id')} type="date" />
               </label>
               <label>
+                <span>配信時間</span>
+                <input value={form.send_time} onChange={update('send_time')} type="time" />
+              </label>
+              <label>
                 <span>配信数</span>
                 <input value={form.total_sent} onChange={update('total_sent')} type="number" min="0" placeholder="12000" />
               </label>
-              <label className="full">
-                <span>HTMLコンテンツ</span>
-                <textarea
+              <div className="full field">
+                <span className="field-label">メール本文</span>
+                <HtmlEditor
                   value={form.html_content}
-                  onChange={update('html_content')}
-                  placeholder="jcityのHTMLメール本文を貼り付け"
-                  rows="10"
+                  onChange={(html) => setForm((current) => ({ ...current, html_content: html }))}
+                  placeholder="文字を入力して書式設定、または「HTML編集」で既存のHTMLを貼り付け"
                 />
-              </label>
+              </div>
               <button className="primary" disabled={saving}>
                 <MailPlus size={18} />
                 <span>{saving ? '保存中...' : 'メールを保存'}</span>

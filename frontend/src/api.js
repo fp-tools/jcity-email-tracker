@@ -39,6 +39,7 @@ export const api = {
   listCampaigns: () => get('/api/campaigns'),
   createCampaign: (payload) => post('/api/campaigns', payload),
   updateCampaign: (id, payload) => patch(`/api/campaigns/${encodeURIComponent(id)}`, payload),
+  deleteCampaign: (id) => del(`/api/campaigns/${encodeURIComponent(id)}`),
   campaignStats: (id) => get(`/api/campaigns/${encodeURIComponent(id)}/stats`),
   emailBreakdown: (id) => get(`/api/campaigns/${encodeURIComponent(id)}/email-breakdown`),
   campaignHeatmap: (id) => get(`/api/campaigns/${encodeURIComponent(id)}/heatmap`),
