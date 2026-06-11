@@ -21,6 +21,7 @@ import HtmlEditor from '../components/HtmlEditor.jsx';
 import LinkTrackModal from '../components/LinkTrackModal.jsx';
 import ConvertedLinks from '../components/ConvertedLinks.jsx';
 import FunnelManager from '../components/FunnelManager.jsx';
+import EventsPanel from '../components/EventsPanel.jsx';
 
 function currentOrigin() {
   return window.location.origin;
@@ -48,6 +49,39 @@ const metricLabels = {
 
 const COLORS = ['#0d9488', '#6366f1', '#f59e0b', '#ef4444', '#64748b'];
 
+// 円グラフ＋%付き凡例（ラベルの重なりを避けるため%は凡例側に表示）
+function DeviceChart({ title, data, nameKey }) {
+  const total = data.reduce((sum, d) => sum + Number(d.count || 0), 0);
+  return (
+    <div className="device-chart">
+      <h3>{title}</h3>
+      {total > 0 ? (
+        <>
+          <ResponsiveContainer width="100%" height={200}>
+            <PieChart>
+              <Pie data={data} dataKey="count" nameKey={nameKey} cx="50%" cy="50%" outerRadius={75}>
+                {data.map((_, index) => <Cell key={index} fill={COLORS[index % COLORS.length]} />)}
+              </Pie>
+              <Tooltip formatter={(value, name) => [value, name]} />
+            </PieChart>
+          </ResponsiveContainer>
+          <ul className="device-legend">
+            {data.map((row, index) => (
+              <li key={index}>
+                <span className="dl-swatch" style={{ background: COLORS[index % COLORS.length] }} />
+                <span className="dl-name">{row[nameKey] || 'unknown'}</span>
+                <span className="dl-val">{row.count}（{((row.count / total) * 100).toFixed(1)}%）</span>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : (
+        <p className="empty">データがありません</p>
+      )}
+    </div>
+  );
+}
+
 export default function CampaignDetail() {
   const { campaignId } = useParams();
   const navigate = useNavigate();
@@ -72,16 +106,27 @@ export default function CampaignDetail() {
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
   const [convertedLinks, setConvertedLinks] = useState([]);
-  const [trendDays, setTrendDays] = useState('all');
+  const [trendPeriod, setTrendPeriod] = useState('all');
+  const [hiddenTrend, setHiddenTrend] = useState({});
+  const [hiddenTod, setHiddenTod] = useState({});
 
-  const trendData = useMemo(() => {
-    const daily = campaign?.daily || [];
-    if (trendDays === 'all') return daily;
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - Number(trendDays));
-    const cutoffStr = cutoff.toISOString().slice(0, 10);
-    return daily.filter((d) => d.day >= cutoffStr);
-  }, [campaign, trendDays]);
+  const { trendData, trendXKey } = useMemo(() => {
+    const hours = { '24h': 24, '48h': 48, '72h': 72 }[trendPeriod];
+    if (hours) {
+      const all = campaign?.hourly || [];
+      const cutoff = new Date(Date.now() - hours * 3600 * 1000);
+      const data = all.filter((h) => new Date(`${h.hour.replace(' ', 'T')}:00+09:00`) >= cutoff);
+      return { trendData: data, trendXKey: 'hour' };
+    }
+    const all = campaign?.daily || [];
+    if (trendPeriod === '7d') {
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - 7);
+      const s = cutoff.toISOString().slice(0, 10);
+      return { trendData: all.filter((d) => d.day >= s), trendXKey: 'day' };
+    }
+    return { trendData: all, trendXKey: 'day' };
+  }, [campaign, trendPeriod]);
 
   const trendTotals = useMemo(
     () =>
@@ -95,6 +140,19 @@ export default function CampaignDetail() {
       ),
     [trendData]
   );
+
+  const fmtTrendTick = (value) => {
+    if (trendXKey === 'hour') {
+      const [date, time] = String(value).split(' ');
+      const [, m, d] = date.split('-');
+      return `${Number(m)}/${Number(d)} ${Number((time || '0').split(':')[0])}時`;
+    }
+    const [, m, d] = String(value).split('-');
+    return m && d ? `${Number(m)}/${Number(d)}` : value;
+  };
+
+  const toggleTrend = (o) => setHiddenTrend((p) => ({ ...p, [o.dataKey]: !p[o.dataKey] }));
+  const toggleTod = (o) => setHiddenTod((p) => ({ ...p, [o.dataKey]: !p[o.dataKey] }));
 
   function onBack() {
     if (campaign?.project_id) navigate(`/projects/${campaign.project_id}`);
@@ -456,13 +514,13 @@ export default function CampaignDetail() {
 
               <section className="panel chart-section">
                 <div className="panel-heading">
-                  <h2>日次推移</h2>
+                  <h2>推移</h2>
                   <div className="tabs">
-                    {[['all', '全期間'], [7, '7日'], [14, '14日'], [30, '30日']].map(([value, label]) => (
+                    {[['all', '全期間'], ['24h', '24時間'], ['48h', '48時間'], ['72h', '72時間'], ['7d', '7日']].map(([value, label]) => (
                       <button
                         key={value}
-                        className={trendDays === value ? 'active' : ''}
-                        onClick={() => setTrendDays(value)}
+                        className={trendPeriod === value ? 'active' : ''}
+                        onClick={() => setTrendPeriod(value)}
                       >
                         {label}
                       </button>
@@ -473,16 +531,17 @@ export default function CampaignDetail() {
                   <>
                     <p className="panel-note">
                       期間内（延べ）: 開封 {trendTotals.opens} / クリック {trendTotals.clicks} / CV {trendTotals.conversions}
+                      <br />凡例をクリックで表示/非表示を切替できます。
                     </p>
                     <ResponsiveContainer width="100%" height={260}>
                       <LineChart data={trendData}>
-                        <XAxis dataKey="day" tick={{ fontSize: 11 }} />
+                        <XAxis dataKey={trendXKey} tick={{ fontSize: 11 }} tickFormatter={fmtTrendTick} />
                         <YAxis allowDecimals={false} />
-                        <Tooltip formatter={(value, name) => [value, metricLabels[name] || name]} />
-                        <Legend formatter={(value) => metricLabels[value] || value} />
-                        <Line type="monotone" dataKey="opens" stroke="#0d9488" name="opens" dot={false} strokeWidth={2} />
-                        <Line type="monotone" dataKey="clicks" stroke="#6366f1" name="clicks" dot={false} strokeWidth={2} />
-                        <Line type="monotone" dataKey="conversions" stroke="#f59e0b" name="conversions" dot={false} strokeWidth={2} />
+                        <Tooltip formatter={(value, name) => [value, metricLabels[name] || name]} labelFormatter={fmtTrendTick} />
+                        <Legend formatter={(value) => metricLabels[value] || value} onClick={toggleTrend} />
+                        <Line type="monotone" dataKey="opens" stroke="#0d9488" name="opens" dot={false} strokeWidth={2} hide={!!hiddenTrend.opens} />
+                        <Line type="monotone" dataKey="clicks" stroke="#6366f1" name="clicks" dot={false} strokeWidth={2} hide={!!hiddenTrend.clicks} />
+                        <Line type="monotone" dataKey="conversions" stroke="#f59e0b" name="conversions" dot={false} strokeWidth={2} hide={!!hiddenTrend.conversions} />
                       </LineChart>
                     </ResponsiveContainer>
                   </>
@@ -495,14 +554,16 @@ export default function CampaignDetail() {
                 <div className="panel-heading">
                   <h2>時間帯別分析</h2>
                 </div>
+                <p className="panel-note">凡例をクリックで表示/非表示を切替できます。</p>
                 <ResponsiveContainer width="100%" height={240}>
                   <BarChart data={campaign.time_of_day || []}>
                     <XAxis dataKey="hour" tickFormatter={(hour) => `${hour}時`} />
                     <YAxis allowDecimals={false} />
                     <Tooltip formatter={(value, name) => [value, metricLabels[name] || name]} />
-                    <Legend formatter={(value) => metricLabels[value] || value} />
-                    <Bar dataKey="opens" fill="#0d9488" name="opens" />
-                    <Bar dataKey="clicks" fill="#6366f1" name="clicks" />
+                    <Legend formatter={(value) => metricLabels[value] || value} onClick={toggleTod} />
+                    <Bar dataKey="opens" fill="#0d9488" name="opens" hide={!!hiddenTod.opens} />
+                    <Bar dataKey="clicks" fill="#6366f1" name="clicks" hide={!!hiddenTod.clicks} />
+                    <Bar dataKey="conversions" fill="#f59e0b" name="conversions" hide={!!hiddenTod.conversions} />
                   </BarChart>
                 </ResponsiveContainer>
               </section>
@@ -512,79 +573,12 @@ export default function CampaignDetail() {
                   <h2>デバイス分析</h2>
                 </div>
                 <div className="device-charts">
-                  <div className="device-chart">
-                    <h3>デバイス</h3>
-                    <ResponsiveContainer width="100%" height={240}>
-                      <PieChart margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
-                        <Pie
-                          data={campaign.devices || []}
-                          dataKey="count"
-                          nameKey="device_type"
-                          cx="50%"
-                          cy="45%"
-                          outerRadius={70}
-                          label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
-                        >
-                          {campaign.devices?.map((_, index) => <Cell key={index} fill={COLORS[index % COLORS.length]} />)}
-                        </Pie>
-                        <Tooltip formatter={(value, name) => [value, name]} />
-                        <Legend />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div className="device-chart">
-                    <h3>OS</h3>
-                    <ResponsiveContainer width="100%" height={240}>
-                      <PieChart margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
-                        <Pie
-                          data={campaign.os_breakdown || []}
-                          dataKey="count"
-                          nameKey="os"
-                          cx="50%"
-                          cy="45%"
-                          outerRadius={70}
-                          label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
-                        >
-                          {campaign.os_breakdown?.map((_, index) => <Cell key={index} fill={COLORS[index % COLORS.length]} />)}
-                        </Pie>
-                        <Tooltip formatter={(value, name) => [value, name]} />
-                        <Legend />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
+                  <DeviceChart title="デバイス" data={campaign.devices || []} nameKey="device_type" />
+                  <DeviceChart title="OS" data={campaign.os_breakdown || []} nameKey="os" />
                 </div>
               </section>
 
-              <section className="panel">
-                <div className="panel-heading">
-                  <h2>リアルタイムイベント</h2>
-                  <button className="ghost" onClick={loadStats}><RefreshCcw size={16} /> 更新</button>
-                </div>
-                <div className="table-wrap">
-                  <table>
-                    <thead>
-                      <tr><th>日時</th><th>種別</th><th>メールID</th><th>リンク</th><th>デバイス</th><th>OS</th><th>IPアドレス</th></tr>
-                    </thead>
-                    <tbody>
-                      {campaign.recent_events?.map((event) => (
-                        <tr key={event.id}>
-                          <td>{formatJst(event.created_at)}</td>
-                          <td>
-                            {eventLabels[event.event_type] || event.event_type}
-                            {event.is_bot ? <span className="bot-badge">ボット</span> : ''}
-                          </td>
-                          <td>{event.email_id}</td>
-                          <td>{event.link_id || '-'}</td>
-                          <td>{event.device_type || '-'}</td>
-                          <td>{event.os || '-'}</td>
-                          <td>{event.ip_address || '-'}</td>
-                        </tr>
-                      ))}
-                      {!campaign.recent_events?.length && <tr><td colSpan="7" className="empty">まだイベントがありません</td></tr>}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
+              <EventsPanel campaignId={campaignId} />
             </>
           )}
 

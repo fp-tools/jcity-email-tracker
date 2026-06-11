@@ -1,5 +1,5 @@
 import express from 'express';
-import { createCampaign, deleteCampaign, getCampaign, getCampaignStats, getClicksByLink, getClicksByTarget, getConversionsByLink, getEmailBreakdown, getLinkLabels, getTargetLabels, listCampaigns, saveLinkLabels, saveTargetLabels, updateCampaign } from '../db.js';
+import { createCampaign, deleteCampaign, getCampaign, getCampaignStats, getClicksByLink, getClicksByTarget, getConversionsByLink, getEmailBreakdown, getEvents, getLinkLabels, getTargetLabels, listCampaigns, saveLinkLabels, saveTargetLabels, updateCampaign } from '../db.js';
 
 const router = express.Router();
 
@@ -36,6 +36,16 @@ router.get('/campaigns/:id/stats', (req, res) => {
   const stats = getCampaignStats(req.params.id, req.query.limit);
   if (!stats) return res.status(404).json({ error: 'Campaign not found' });
   return res.json({ campaign: stats });
+});
+
+router.get('/campaigns/:id/events', (req, res) => {
+  const campaign = getCampaign(req.params.id);
+  if (!campaign) return res.status(404).json({ error: 'Campaign not found' });
+  const { type, limit, offset } = req.query;
+  return res.json({
+    ...getEvents(req.params.id, { type, limit, offset }),
+    labels: getLinkLabels(req.params.id)
+  });
 });
 
 router.get('/campaigns/:id/email-breakdown', (req, res) => {

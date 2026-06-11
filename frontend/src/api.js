@@ -45,6 +45,8 @@ export const api = {
   campaignStats: (id) => get(`/api/campaigns/${encodeURIComponent(id)}/stats`),
   emailBreakdown: (id) => get(`/api/campaigns/${encodeURIComponent(id)}/email-breakdown`),
   campaignHeatmap: (id) => get(`/api/campaigns/${encodeURIComponent(id)}/heatmap`),
+  campaignEvents: (id, { type = 'all', limit = 20, offset = 0 } = {}) =>
+    get(`/api/campaigns/${encodeURIComponent(id)}/events?type=${encodeURIComponent(type)}&limit=${limit}&offset=${offset}`),
   saveLinkLabels: (id, labels) => post(`/api/campaigns/${encodeURIComponent(id)}/link-labels`, { labels }),
   saveTargetLabels: (id, labels) => post(`/api/campaigns/${encodeURIComponent(id)}/target-labels`, { labels }),
   getGa4: () => get('/api/config/ga4'),

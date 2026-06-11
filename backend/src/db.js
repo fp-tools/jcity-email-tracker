@@ -298,6 +298,21 @@ const dailyTrendStmt = db.prepare(`
   ORDER BY day
 `);
 
+// 時間別推移（直近72時間、JST 1時間単位。ボット除外）
+const hourlyTrendStmt = db.prepare(`
+  SELECT
+    strftime('%Y-%m-%d %H:00', created_at, '+9 hours') AS hour,
+    COUNT(CASE WHEN event_type = 'open' THEN 1 END) AS opens,
+    COUNT(DISTINCT CASE WHEN event_type = 'open' THEN email_id END) AS unique_opens,
+    COUNT(CASE WHEN event_type = 'click' THEN 1 END) AS clicks,
+    COUNT(DISTINCT CASE WHEN event_type = 'click' THEN email_id END) AS unique_clicks,
+    COUNT(CASE WHEN event_type = 'conversion' THEN 1 END) AS conversions
+  FROM email_events
+  WHERE campaign_id = ? AND is_bot = 0 AND created_at >= datetime('now', '-72 hours')
+  GROUP BY hour
+  ORDER BY hour
+`);
+
 const timeOfDayStmt = db.prepare(`
   SELECT
     CAST(strftime('%H', created_at, '+9 hours') AS INTEGER) AS hour,
@@ -646,8 +661,42 @@ export function getCampaignStats(id, limit = 100) {
       clicks: Number(row.clicks || 0),
       unique_clicks: Number(row.unique_clicks || 0),
       conversions: Number(row.conversions || 0)
+    })),
+    hourly: hourlyTrendStmt.all(id).map((row) => ({
+      hour: row.hour,
+      opens: Number(row.opens || 0),
+      unique_opens: Number(row.unique_opens || 0),
+      clicks: Number(row.clicks || 0),
+      unique_clicks: Number(row.unique_clicks || 0),
+      conversions: Number(row.conversions || 0)
     }))
   };
+}
+
+// イベント一覧（種別フィルタ・ページング）。CSV/リアルタイム表示用
+export function getEvents(campaignId, { type = 'all', limit = 20, offset = 0 } = {}) {
+  const lim = Math.min(Math.max(Number(limit) || 20, 1), 5000);
+  const off = Math.max(Number(offset) || 0, 0);
+  const typeCond = ['open', 'click', 'conversion'].includes(type) ? ' AND event_type = @type' : '';
+  const countParams = { cid: campaignId };
+  const listParams = { cid: campaignId, lim, off };
+  if (typeCond) {
+    countParams.type = type;
+    listParams.type = type;
+  }
+  const total = db
+    .prepare(`SELECT COUNT(*) AS n FROM email_events WHERE campaign_id = @cid${typeCond}`)
+    .get(countParams).n;
+  const events = db
+    .prepare(
+      `SELECT id, campaign_id, email_id, event_type, link_id, ip_address, device_type, os, is_bot, target_url, cv_point, created_at
+       FROM email_events
+       WHERE campaign_id = @cid${typeCond}
+       ORDER BY created_at DESC, id DESC
+       LIMIT @lim OFFSET @off`
+    )
+    .all(listParams);
+  return { events, total: Number(total || 0) };
 }
 
 export function listEmailsByProject(projectId) {
