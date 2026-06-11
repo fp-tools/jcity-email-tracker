@@ -106,12 +106,34 @@ export default function CampaignDetail() {
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
   const [convertedLinks, setConvertedLinks] = useState([]);
+  const [statsUpdatedAt, setStatsUpdatedAt] = useState(null);
   const [trendPeriod, setTrendPeriod] = useState('all');
+  const [trendAxis, setTrendAxis] = useState('clock'); // 'clock'=実時刻 | 'elapsed'=配信後経過
   const [hiddenTrend, setHiddenTrend] = useState({});
   const [hiddenTod, setHiddenTod] = useState({});
 
+  const hasSendDate = Boolean(campaign?.jcity_id);
+
   const { trendData, trendXKey } = useMemo(() => {
     const hours = { '24h': 24, '48h': 48, '72h': 72 }[trendPeriod];
+
+    if (trendAxis === 'elapsed') {
+      // 配信日時を0時間として、配信後n時間の反応を見る（1時間単位、最大168h=7日）
+      const all = campaign?.elapsed || [];
+      const limit = hours || (trendPeriod === '7d' ? 168 : 168);
+      const filtered = all.filter((e) => e.elapsed_hour < limit);
+      // 反応ゼロの時間帯も0で埋めてカーブを正しく見せる
+      const maxH = filtered.length ? Math.min(Math.max(...filtered.map((e) => e.elapsed_hour)) + 1, limit) : 0;
+      const byHour = new Map(filtered.map((e) => [e.elapsed_hour, e]));
+      const data = Array.from({ length: maxH }, (_, h) => ({
+        elapsed_hour: h,
+        opens: byHour.get(h)?.opens || 0,
+        clicks: byHour.get(h)?.clicks || 0,
+        conversions: byHour.get(h)?.conversions || 0
+      }));
+      return { trendData: data, trendXKey: 'elapsed_hour' };
+    }
+
     if (hours) {
       const all = campaign?.hourly || [];
       const cutoff = new Date(Date.now() - hours * 3600 * 1000);
@@ -126,7 +148,7 @@ export default function CampaignDetail() {
       return { trendData: all.filter((d) => d.day >= s), trendXKey: 'day' };
     }
     return { trendData: all, trendXKey: 'day' };
-  }, [campaign, trendPeriod]);
+  }, [campaign, trendPeriod, trendAxis]);
 
   const trendTotals = useMemo(
     () =>
@@ -142,6 +164,7 @@ export default function CampaignDetail() {
   );
 
   const fmtTrendTick = (value) => {
+    if (trendXKey === 'elapsed_hour') return `+${value}h`;
     if (trendXKey === 'hour') {
       const [date, time] = String(value).split(' ');
       const [, m, d] = date.split('-');
@@ -150,6 +173,9 @@ export default function CampaignDetail() {
     const [, m, d] = String(value).split('-');
     return m && d ? `${Number(m)}/${Number(d)}` : value;
   };
+
+  const fmtTrendLabel = (value) =>
+    trendXKey === 'elapsed_hour' ? `配信後 ${value}〜${Number(value) + 1}時間` : fmtTrendTick(value);
 
   const toggleTrend = (o) => setHiddenTrend((p) => ({ ...p, [o.dataKey]: !p[o.dataKey] }));
   const toggleTod = (o) => setHiddenTod((p) => ({ ...p, [o.dataKey]: !p[o.dataKey] }));
@@ -164,6 +190,7 @@ export default function CampaignDetail() {
     try {
       const data = await api.campaignStats(campaignId);
       setCampaign(data.campaign);
+      setStatsUpdatedAt(new Date());
     } catch (err) {
       setError(err.message);
     }
@@ -303,6 +330,11 @@ export default function CampaignDetail() {
         <div className="detail-actions">
           <button className="ghost" onClick={onBack}><ArrowLeft size={18} /> 戻る</button>
           <div className="detail-actions-right">
+            {statsUpdatedAt && (
+              <span className="last-updated" title="10秒ごとに自動更新されます">
+                最終更新 {statsUpdatedAt.toLocaleTimeString('ja-JP')}
+              </span>
+            )}
             <button className="ghost" onClick={editingInfo ? () => setEditingInfo(false) : startEditInfo} disabled={!campaign}>
               <Pencil size={16} /> {editingInfo ? '編集を閉じる' : '件名・本文を編集'}
             </button>
@@ -515,18 +547,36 @@ export default function CampaignDetail() {
               <section className="panel chart-section">
                 <div className="panel-heading">
                   <h2>推移</h2>
-                  <div className="tabs">
-                    {[['all', '全期間'], ['24h', '24時間'], ['48h', '48時間'], ['72h', '72時間'], ['7d', '7日']].map(([value, label]) => (
+                  <div className="trend-controls">
+                    <div className="tabs">
+                      <button className={trendAxis === 'clock' ? 'active' : ''} onClick={() => setTrendAxis('clock')}>実時刻</button>
                       <button
-                        key={value}
-                        className={trendPeriod === value ? 'active' : ''}
-                        onClick={() => setTrendPeriod(value)}
+                        className={trendAxis === 'elapsed' ? 'active' : ''}
+                        onClick={() => setTrendAxis('elapsed')}
+                        disabled={!hasSendDate}
+                        title={hasSendDate ? '配信日時を0時間として経過時間で表示' : '配信日を登録すると使えます'}
                       >
-                        {label}
+                        配信後
                       </button>
-                    ))}
+                    </div>
+                    <div className="tabs">
+                      {[['all', '全期間'], ['24h', '24時間'], ['48h', '48時間'], ['72h', '72時間'], ['7d', '7日']].map(([value, label]) => (
+                        <button
+                          key={value}
+                          className={trendPeriod === value ? 'active' : ''}
+                          onClick={() => setTrendPeriod(value)}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
+                {trendAxis === 'elapsed' && (
+                  <p className="panel-note">
+                    配信日時（{campaign.jcity_id} {campaign.send_time || '00:00'}）を0時間として、配信後の経過時間別に1時間単位で表示しています（最大7日間）。
+                  </p>
+                )}
                 {trendData.length > 0 ? (
                   <>
                     <p className="panel-note">
@@ -537,7 +587,7 @@ export default function CampaignDetail() {
                       <LineChart data={trendData}>
                         <XAxis dataKey={trendXKey} tick={{ fontSize: 11 }} tickFormatter={fmtTrendTick} />
                         <YAxis allowDecimals={false} />
-                        <Tooltip formatter={(value, name) => [value, metricLabels[name] || name]} labelFormatter={fmtTrendTick} />
+                        <Tooltip formatter={(value, name) => [value, metricLabels[name] || name]} labelFormatter={fmtTrendLabel} />
                         <Legend formatter={(value) => metricLabels[value] || value} onClick={toggleTrend} />
                         <Line type="monotone" dataKey="opens" stroke="#0d9488" name="opens" dot={false} strokeWidth={2} hide={!!hiddenTrend.opens} />
                         <Line type="monotone" dataKey="clicks" stroke="#6366f1" name="clicks" dot={false} strokeWidth={2} hide={!!hiddenTrend.clicks} />

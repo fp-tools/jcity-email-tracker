@@ -298,6 +298,22 @@ const dailyTrendStmt = db.prepare(`
   ORDER BY day
 `);
 
+// 配信時刻起点の経過時間別推移（配信後0〜168時間、1時間単位。ボット除外）
+// ? = 配信日時(JST "YYYY-MM-DD HH:MM")。created_at(UTC)を+9hでJST化して差分を時間に換算
+const elapsedTrendStmt = db.prepare(`
+  SELECT
+    CAST((julianday(created_at, '+9 hours') - julianday(@send_dt)) * 24 AS INTEGER) AS elapsed_hour,
+    COUNT(CASE WHEN event_type = 'open' THEN 1 END) AS opens,
+    COUNT(CASE WHEN event_type = 'click' THEN 1 END) AS clicks,
+    COUNT(CASE WHEN event_type = 'conversion' THEN 1 END) AS conversions
+  FROM email_events
+  WHERE campaign_id = @cid AND is_bot = 0
+    AND julianday(created_at, '+9 hours') >= julianday(@send_dt)
+    AND (julianday(created_at, '+9 hours') - julianday(@send_dt)) * 24 < 168
+  GROUP BY elapsed_hour
+  ORDER BY elapsed_hour
+`);
+
 // 時間別推移（直近72時間、JST 1時間単位。ボット除外）
 const hourlyTrendStmt = db.prepare(`
   SELECT
@@ -669,7 +685,17 @@ export function getCampaignStats(id, limit = 100) {
       clicks: Number(row.clicks || 0),
       unique_clicks: Number(row.unique_clicks || 0),
       conversions: Number(row.conversions || 0)
-    }))
+    })),
+    elapsed: stats.jcity_id
+      ? elapsedTrendStmt
+          .all({ cid: id, send_dt: `${stats.jcity_id} ${stats.send_time || '00:00'}` })
+          .map((row) => ({
+            elapsed_hour: Number(row.elapsed_hour || 0),
+            opens: Number(row.opens || 0),
+            clicks: Number(row.clicks || 0),
+            conversions: Number(row.conversions || 0)
+          }))
+      : []
   };
 }
 

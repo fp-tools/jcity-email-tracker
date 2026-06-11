@@ -14,6 +14,7 @@ export default function App() {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [lastUpdated, setLastUpdated] = useState(null);
   const location = useLocation();
   const params = useParams();
 
@@ -27,6 +28,7 @@ export default function App() {
       ]);
       setCampaigns(campaignData.campaigns || []);
       setProjects(projectData.projects || []);
+      setLastUpdated(new Date());
     } catch (err) {
       setError(err.message);
     } finally {
@@ -96,9 +98,18 @@ export default function App() {
             <p className="eyebrow">メールトラッキング管理</p>
             <h1>{title}</h1>
           </div>
-          <button className="icon-button" onClick={loadAll} disabled={loading} title="統計を更新">
-            <RefreshCcw size={18} />
-          </button>
+          <div className="topbar-right">
+            <span className="last-updated" title="15秒ごとに自動更新されます">
+              {loading
+                ? '更新中...'
+                : lastUpdated
+                  ? `最終更新 ${lastUpdated.toLocaleTimeString('ja-JP')}（自動更新中）`
+                  : ''}
+            </span>
+            <button className="icon-button" onClick={loadAll} disabled={loading} title="統計を更新">
+              <RefreshCcw size={18} className={loading ? 'spin' : ''} />
+            </button>
+          </div>
         </header>
 
         {error && <div className="alert">{error}</div>}
