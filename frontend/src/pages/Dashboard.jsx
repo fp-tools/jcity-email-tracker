@@ -24,9 +24,9 @@ function Metric({ label, value, note, icon: Icon }) {
 }
 
 const rateLabels = {
-  open_rate: '開封率',
-  click_rate: 'クリック率',
-  conversion_rate: 'CV率'
+  open_rate: '開封率(延べ)',
+  click_rate: 'クリック率(延べ)',
+  conversion_rate: 'CV率(延べ)'
 };
 
 const WEEKDAYS = ['日', '月', '火', '水', '木', '金', '土'];
@@ -57,9 +57,9 @@ function aggregate(campaigns, keyFn, order) {
     if (key == null) continue;
     const cur = map.get(key) || { name: key, sent: 0, opens: 0, clicks: 0, conversions: 0, count: 0 };
     cur.sent += campaign.total_sent;
-    cur.opens += campaign.unique_opens;
-    cur.clicks += campaign.unique_clicks;
-    cur.conversions += campaign.unique_conversions;
+    cur.opens += campaign.opens;
+    cur.clicks += campaign.clicks;
+    cur.conversions += campaign.conversions;
     cur.count += 1;
     map.set(key, cur);
   }
@@ -115,24 +115,27 @@ export default function Dashboard() {
 
   const totals = campaigns.reduce((acc, campaign) => {
     acc.sent += campaign.total_sent;
+    acc.opens += campaign.opens;
+    acc.clicks += campaign.clicks;
+    acc.conversions += campaign.conversions;
     acc.uniqueOpens += campaign.unique_opens;
     acc.uniqueClicks += campaign.unique_clicks;
     acc.uniqueConversions += campaign.unique_conversions;
     return acc;
-  }, { sent: 0, uniqueOpens: 0, uniqueClicks: 0, uniqueConversions: 0 });
+  }, { sent: 0, opens: 0, clicks: 0, conversions: 0, uniqueOpens: 0, uniqueClicks: 0, uniqueConversions: 0 });
 
   const pct = (value) => (totals.sent ? `${((value / totals.sent) * 100).toFixed(2)}%` : '0.00%');
 
   // プロジェクト比較（配信実績があるものを上位順に表示）
   const comparison = projects
     .filter((project) => project.total_sent > 0 || project.email_count > 0)
-    .sort((a, b) => b.open_rate - a.open_rate);
+    .sort((a, b) => b.open_rate_total - a.open_rate_total);
 
   const projectChart = comparison.map((project) => ({
     name: project.name.length > 8 ? `${project.name.slice(0, 8)}…` : project.name,
-    open_rate: project.open_rate,
-    click_rate: project.click_rate,
-    conversion_rate: project.conversion_rate
+    open_rate: project.open_rate_total,
+    click_rate: project.click_rate_total,
+    conversion_rate: project.conversion_rate_total
   }));
 
   const weekdayData = useMemo(
@@ -185,9 +188,9 @@ export default function Dashboard() {
   return (
     <div className="stack">
       <div className="metrics-grid">
-        <Metric label="通算ユニーク開封率" value={pct(totals.uniqueOpens)} note={`${totals.uniqueOpens} / ${totals.sent} 配信数`} icon={UsersRound} />
-        <Metric label="通算ユニーククリック率" value={pct(totals.uniqueClicks)} note={`${totals.uniqueClicks} クリック`} icon={MousePointerClick} />
-        <Metric label="通算CV率" value={pct(totals.uniqueConversions)} note={`${totals.uniqueConversions} コンバージョン`} icon={Target} />
+        <Metric label="通算開封率（延べ）" value={pct(totals.opens)} note={`${totals.opens.toLocaleString()} 開封 / ${totals.sent.toLocaleString()} 配信（ユニーク ${totals.uniqueOpens.toLocaleString()}）`} icon={UsersRound} />
+        <Metric label="通算クリック率（延べ）" value={pct(totals.clicks)} note={`${totals.clicks.toLocaleString()} クリック（ユニーク ${totals.uniqueClicks.toLocaleString()}）`} icon={MousePointerClick} />
+        <Metric label="通算CV率（延べ）" value={pct(totals.conversions)} note={`${totals.conversions.toLocaleString()} CV（ユニーク ${totals.uniqueConversions.toLocaleString()}）`} icon={Target} />
       </div>
 
       <section className="panel">
@@ -216,9 +219,9 @@ export default function Dashboard() {
                     <th>プロジェクト</th>
                     <th>メール数</th>
                     <th>配信数</th>
-                    <th>開封率</th>
-                    <th>クリック率</th>
-                    <th>CV率</th>
+                    <th>開封率(延べ)</th>
+                    <th>クリック率(延べ)</th>
+                    <th>CV率(延べ)</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -227,9 +230,9 @@ export default function Dashboard() {
                       <td><strong>{project.name}</strong></td>
                       <td>{project.email_count}</td>
                       <td>{project.total_sent.toLocaleString()}</td>
-                      <td>{project.open_rate}%</td>
-                      <td>{project.click_rate}%</td>
-                      <td>{project.conversion_rate}%</td>
+                      <td>{project.open_rate_total}%</td>
+                      <td>{project.click_rate_total}%</td>
+                      <td>{project.conversion_rate_total}%</td>
                     </tr>
                   ))}
                 </tbody>
@@ -305,9 +308,9 @@ export default function Dashboard() {
                 <Th label="メール名" k="name" />
                 <Th label="配信日" k="jcity_id" />
                 <Th label="配信数" k="total_sent" />
-                <Th label="開封率" k="open_rate" />
-                <Th label="クリック率" k="click_rate" />
-                <Th label="CV率" k="conversion_rate" />
+                <Th label="開封率(延べ)" k="open_rate_total" />
+                <Th label="クリック率(延べ)" k="click_rate_total" />
+                <Th label="CV率(延べ)" k="conversion_rate_total" />
               </tr>
             </thead>
             <tbody>
@@ -319,9 +322,9 @@ export default function Dashboard() {
                   </td>
                   <td>{campaign.jcity_id || '-'}{campaign.send_time ? ` ${campaign.send_time}` : ''}</td>
                   <td>{campaign.total_sent.toLocaleString()}</td>
-                  <td>{campaign.open_rate}%</td>
-                  <td>{campaign.click_rate}%</td>
-                  <td>{campaign.conversion_rate}%</td>
+                  <td>{campaign.open_rate_total}%</td>
+                  <td>{campaign.click_rate_total}%</td>
+                  <td>{campaign.conversion_rate_total}%</td>
                 </tr>
               ))}
               {!sorted.length && (

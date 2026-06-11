@@ -175,7 +175,22 @@ const listProjectsStmt = db.prepare(`
       FROM email_events e
       JOIN campaigns c ON c.id = e.campaign_id
       WHERE c.project_id = p.id AND e.event_type = 'conversion' AND e.is_bot = 0
-    ) AS unique_conversions
+    ) AS unique_conversions,
+    (
+      SELECT COUNT(*)
+      FROM email_events e JOIN campaigns c ON c.id = e.campaign_id
+      WHERE c.project_id = p.id AND e.event_type = 'open' AND e.is_bot = 0
+    ) AS opens,
+    (
+      SELECT COUNT(*)
+      FROM email_events e JOIN campaigns c ON c.id = e.campaign_id
+      WHERE c.project_id = p.id AND e.event_type = 'click' AND e.is_bot = 0
+    ) AS clicks,
+    (
+      SELECT COUNT(*)
+      FROM email_events e JOIN campaigns c ON c.id = e.campaign_id
+      WHERE c.project_id = p.id AND e.event_type = 'conversion' AND e.is_bot = 0
+    ) AS conversions
   FROM projects p
   ORDER BY p.created_at DESC
 `);
@@ -428,7 +443,10 @@ function withRates(row) {
     unique_recipients: Number(row.unique_recipients || 0),
     open_rate: rate(row.unique_opens),
     click_rate: rate(row.unique_clicks),
-    conversion_rate: rate(row.unique_conversions)
+    conversion_rate: rate(row.unique_conversions),
+    open_rate_total: rate(row.opens),
+    click_rate_total: rate(row.clicks),
+    conversion_rate_total: rate(row.conversions)
   };
 }
 
@@ -442,9 +460,15 @@ function withProjectRates(row) {
     unique_opens: Number(row.unique_opens || 0),
     unique_clicks: Number(row.unique_clicks || 0),
     unique_conversions: Number(row.unique_conversions || 0),
+    opens: Number(row.opens || 0),
+    clicks: Number(row.clicks || 0),
+    conversions: Number(row.conversions || 0),
     open_rate: rate(row.unique_opens),
     click_rate: rate(row.unique_clicks),
-    conversion_rate: rate(row.unique_conversions)
+    conversion_rate: rate(row.unique_conversions),
+    open_rate_total: rate(row.opens),
+    click_rate_total: rate(row.clicks),
+    conversion_rate_total: rate(row.conversions)
   };
 }
 

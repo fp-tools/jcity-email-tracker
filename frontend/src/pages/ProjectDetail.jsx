@@ -220,8 +220,8 @@ export default function ProjectDetail() {
         <div className="metrics-grid compact">
           <section className="metric"><span>メール数</span><strong>{project?.email_count || emails.length}</strong><small>登録済みメール</small></section>
           <section className="metric"><span>配信数</span><strong>{(project?.total_sent || 0).toLocaleString()}</strong><small>合計</small></section>
-          <section className="metric"><span>開封率</span><strong>{project?.open_rate || 0}%</strong><small>{project?.unique_opens || 0} 開封</small></section>
-          <section className="metric"><span>クリック率</span><strong>{project?.click_rate || 0}%</strong><small>{project?.unique_clicks || 0} クリック</small></section>
+          <section className="metric"><span>開封率(延べ)</span><strong>{project?.open_rate_total || 0}%</strong><small>{(project?.opens || 0).toLocaleString()} 開封 ・ ユニーク {project?.unique_opens || 0}</small></section>
+          <section className="metric"><span>クリック率(延べ)</span><strong>{project?.click_rate_total || 0}%</strong><small>{(project?.clicks || 0).toLocaleString()} クリック ・ ユニーク {project?.unique_clicks || 0}</small></section>
         </div>
       </section>
 

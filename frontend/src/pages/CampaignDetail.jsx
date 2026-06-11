@@ -350,10 +350,10 @@ export default function CampaignDetail() {
           )}
           {editingInfo && <ConvertedLinks links={convertedLinks} />}
           <div className="metrics-grid">
-            <section className="metric"><span>ユニーク開封率</span><strong>{campaign.open_rate}%</strong><small>{campaign.unique_opens} / {campaign.total_sent}</small></section>
-            <section className="metric"><span>ユニーククリック率</span><strong>{campaign.click_rate}%</strong><small>{campaign.unique_clicks} 件</small></section>
-            <section className="metric"><span>コンバージョン率</span><strong>{campaign.conversion_rate}%</strong><small>{campaign.unique_conversions} 件</small></section>
-            <section className="metric"><span>ユニークメール数</span><strong>{campaign.unique_recipients}</strong><small>イベント発生メールID</small></section>
+            <section className="metric"><span>開封（延べ）</span><strong>{campaign.opens}</strong><small>開封率 {campaign.open_rate_total}% ・ ユニーク {campaign.unique_opens}</small></section>
+            <section className="metric"><span>クリック（延べ）</span><strong>{campaign.clicks}</strong><small>クリック率 {campaign.click_rate_total}% ・ ユニーク {campaign.unique_clicks}</small></section>
+            <section className="metric"><span>CV（延べ）</span><strong>{campaign.conversions}</strong><small>CV率 {campaign.conversion_rate_total}% ・ ユニーク {campaign.unique_conversions}</small></section>
+            <section className="metric"><span>配信数</span><strong>{campaign.total_sent.toLocaleString()}</strong><small>ユニークメール {campaign.unique_recipients}</small></section>
           </div>
           {campaign.bot_opens > 0 && (
             <p className="panel-note bot-note">
@@ -512,39 +512,45 @@ export default function CampaignDetail() {
                   <h2>デバイス分析</h2>
                 </div>
                 <div className="device-charts">
-                  <div>
+                  <div className="device-chart">
                     <h3>デバイス</h3>
-                    <PieChart width={320} height={230}>
-                      <Pie
-                        data={campaign.devices || []}
-                        dataKey="count"
-                        nameKey="device_type"
-                        cx="50%"
-                        cy="50%"
-                        outerRadius={80}
-                        label={({ device_type, percent }) => `${device_type} ${(percent * 100).toFixed(0)}%`}
-                      >
-                        {campaign.devices?.map((_, index) => <Cell key={index} fill={COLORS[index % COLORS.length]} />)}
-                      </Pie>
-                      <Tooltip />
-                    </PieChart>
+                    <ResponsiveContainer width="100%" height={240}>
+                      <PieChart margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
+                        <Pie
+                          data={campaign.devices || []}
+                          dataKey="count"
+                          nameKey="device_type"
+                          cx="50%"
+                          cy="45%"
+                          outerRadius={70}
+                          label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
+                        >
+                          {campaign.devices?.map((_, index) => <Cell key={index} fill={COLORS[index % COLORS.length]} />)}
+                        </Pie>
+                        <Tooltip formatter={(value, name) => [value, name]} />
+                        <Legend />
+                      </PieChart>
+                    </ResponsiveContainer>
                   </div>
-                  <div>
+                  <div className="device-chart">
                     <h3>OS</h3>
-                    <PieChart width={320} height={230}>
-                      <Pie
-                        data={campaign.os_breakdown || []}
-                        dataKey="count"
-                        nameKey="os"
-                        cx="50%"
-                        cy="50%"
-                        outerRadius={80}
-                        label={({ os, percent }) => `${os} ${(percent * 100).toFixed(0)}%`}
-                      >
-                        {campaign.os_breakdown?.map((_, index) => <Cell key={index} fill={COLORS[index % COLORS.length]} />)}
-                      </Pie>
-                      <Tooltip />
-                    </PieChart>
+                    <ResponsiveContainer width="100%" height={240}>
+                      <PieChart margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
+                        <Pie
+                          data={campaign.os_breakdown || []}
+                          dataKey="count"
+                          nameKey="os"
+                          cx="50%"
+                          cy="45%"
+                          outerRadius={70}
+                          label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
+                        >
+                          {campaign.os_breakdown?.map((_, index) => <Cell key={index} fill={COLORS[index % COLORS.length]} />)}
+                        </Pie>
+                        <Tooltip formatter={(value, name) => [value, name]} />
+                        <Legend />
+                      </PieChart>
+                    </ResponsiveContainer>
                   </div>
                 </div>
               </section>
